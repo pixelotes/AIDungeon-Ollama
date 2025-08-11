@@ -15,12 +15,22 @@ from aidungeon.play import GameManager
 
 def main():
     """Main entry point for AI Dungeon Clover Edition (Ollama)."""
-    
-    # Welcome message
-    output("=" * 60, "message")
-    output("Welcome to AI Dungeon: Clover Edition (Ollama)", "message")
-    output("=" * 60, "message")
-    output("")
+
+    # Clover ascii art
+    with open(Path("interface/", "clover"), "r", encoding="utf-8") as file_:
+        print(file_.read())
+
+    # AIDungeon banner
+    with open(Path("interface/", "mainTitle.txt"), "r", encoding="utf-8") as file:
+        output(file.read(), "title", wrap=False, beg='')
+
+    # Clover Edition banner
+    with open(Path("interface/", "subTitle.txt"), "r", encoding="utf-8") as file:
+        output(file.read(), "subtitle", wrap=False, beg='')
+
+    output("Go to https://github.com/cloveranon/Clover-Edition/ "
+           "or email cloveranon@nuke.africa for bug reports, help, and feature requests.",
+           'subsubtitle', end="\n\n")
     
     # Check if Ollama is available
     try:
