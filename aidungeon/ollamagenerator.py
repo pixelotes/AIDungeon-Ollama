@@ -4,7 +4,7 @@ import json
 import re
 from typing import Union, Optional, List
 from pathlib import Path
-from .getconfig import settings, logger
+from .getconfig import settings, logger, get_ollama_model, get_ollama_host
 from .utils import cut_trailing_sentence, output, clear_lines, format_result, use_ptoolkit
 
 class OllamaGenerator:
@@ -326,68 +326,63 @@ def get_generator():
     This replaces the original get_generator() function in play.py.
     """
     output("\nInitializing Ollama AI Engine!", "loading-message", end="\n\n")
-    
-    # Get model selection from user or environment
+
+    # Get host from settings or environment
+    ollama_host = get_ollama_host()
     model_name = None
-    ollama_host = "http://localhost:11434"
-    
-    # Check for environment variables
-    import os
-    env_model = os.environ.get("OLLAMA_MODEL")
-    env_host = os.environ.get("OLLAMA_HOST")
-    
-    if env_host:
-        ollama_host = env_host
-    
-    if env_model:
-        model_name = env_model
-        logger.info(f"Using model from environment: {model_name}")
-    else:
-        # Get available models from Ollama
-        try:
-            response = requests.get(f"{ollama_host}/api/tags", timeout=10)
-            response.raise_for_status()
-            models_data = response.json()
-            available_models = [model['name'] for model in models_data.get('models', [])]
-            
-            if not available_models:
-                output("No models found in Ollama. Please pull a model first:", "error")
-                output("Example: ollama pull llama2", "message")
-                output("Then restart this application.", "message")
-                exit(1)
-            
-            if len(available_models) == 1:
-                model_name = available_models[0]
-                logger.info(f"Using only available model: {model_name}")
-            else:
-                output("Available Ollama models:", "message")
-                for i, model in enumerate(available_models):
-                    output(f"{i}) {model}", "menu")
-                output(f"{len(available_models)}) Exit", "menu")
-                
-                while True:
-                    try:
-                        selection = input("Select a model: ").strip()
-                        if not selection:
-                            selection = "0"
-                        selection = int(selection)
-                        
-                        if selection == len(available_models):
-                            output("Exiting.", "message")
-                            exit(0)
-                        elif 0 <= selection < len(available_models):
-                            model_name = available_models[selection]
-                            break
-                        else:
-                            output("Invalid selection.", "error")
-                    except ValueError:
-                        output("Please enter a number.", "error")
-        
-        except requests.exceptions.RequestException:
-            output("Cannot connect to Ollama. Make sure it's running at " + ollama_host, "error")
-            output("Start Ollama with: ollama serve", "message")
+
+    # Get available models from Ollama
+    try:
+        response = requests.get(f"{ollama_host}/api/tags", timeout=10)
+        response.raise_for_status()
+        models_data = response.json()
+        available_models = [model['name'] for model in models_data.get('models', [])]
+
+        if not available_models:
+            output("No models found in Ollama. Please pull a model first:", "error")
+            output("Example: ollama pull llama2", "message")
+            output("Then restart this application.", "message")
             exit(1)
-    
+
+    except requests.exceptions.RequestException:
+        output("Cannot connect to Ollama. Make sure it's running at " + ollama_host, "error")
+        output("Start Ollama with: ollama serve", "message")
+        exit(1)
+
+    # Check if the configured model exists
+    configured_model = get_ollama_model()
+    if configured_model in available_models:
+        logger.info(f"Using configured model: {configured_model}")
+        model_name = configured_model
+    else:
+        logger.warning(f"Configured model '{configured_model}' not found. Showing selection menu.")
+        if len(available_models) == 1:
+            model_name = available_models[0]
+            logger.info(f"Using only available model: {model_name}")
+        else:
+            output("Available Ollama models:", "message")
+            for i, model in enumerate(available_models):
+                output(f"{i}) {model}", "menu")
+            output(f"{len(available_models)}) Exit", "menu")
+
+            while True:
+                try:
+                    selection = input("Select a model: ").strip()
+                    if not selection:
+                        selection = "0"
+                    selection = int(selection)
+
+                    if selection == len(available_models):
+                        output("Exiting.", "message")
+                        exit(0)
+                    elif 0 <= selection < len(available_models):
+                        model_name = available_models[selection]
+                        break
+                    else:
+                        output("Invalid selection.", "error")
+                except ValueError:
+                    output("Please enter a number.", "error")
+
     try:
         generator = OllamaGenerator(
             model_name=model_name,
