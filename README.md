@@ -1,4 +1,7 @@
 # AIDungeon2
+
+**Note**: This is a custom version of AIDungeon with gpt2 support removed and replaced with Ollama support. This allows using AIDungeon with modern up-to-date models.
+
 ## Clover Edition
 
 A fork of AIDungeon2 with numerous improvements. Now supporting GPT-Neo.
