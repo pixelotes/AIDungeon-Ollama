@@ -27,17 +27,6 @@ class OllamaGenerator:
     ):
         """
         Initialize the Ollama generator.
-        
-        Args:
-            model_name: Name of the Ollama model to use (e.g., "llama2:7b", "mistral", "codellama")
-            ollama_host: Ollama server URL
-            generate_num: Target number of tokens to generate
-            temperature: Sampling temperature (0.0 to 2.0)
-            top_k: Top-k sampling parameter
-            top_p: Top-p (nucleus) sampling parameter
-            repetition_penalty: Penalty for repetition
-            repetition_penalty_range: Range for repetition penalty
-            repetition_penalty_slope: Slope for repetition penalty
         """
         self.model_name = model_name
         self.ollama_host = ollama_host.rstrip('/')
@@ -49,10 +38,8 @@ class OllamaGenerator:
         self.repetition_penalty_range = repetition_penalty_range
         self.repetition_penalty_slope = repetition_penalty_slope
         
-        # Test connection and model availability
         self._validate_setup()
         
-        # Calculate max context length based on model
         self.max_history_tokens = self._get_context_length() - generate_num
         
         logger.info(f"Initialized OllamaGenerator with model: {model_name}")
@@ -61,11 +48,9 @@ class OllamaGenerator:
     def _validate_setup(self):
         """Validate Ollama connection and model availability."""
         try:
-            # Test connection
             response = requests.get(f"{self.ollama_host}/api/tags", timeout=10)
             response.raise_for_status()
             
-            # Check if model is available
             models = response.json().get('models', [])
             available_models = [model['name'] for model in models]
             
@@ -91,11 +76,8 @@ class OllamaGenerator:
             response.raise_for_status()
             model_info = response.json()
             
-            # Try to extract context length from model info
-            # This varies by model, so we'll use sensible defaults
             context_length = model_info.get('modelfile', '').find('num_ctx')
             if context_length == -1:
-                # Default context lengths based on model type
                 if 'llama2' in self.model_name.lower():
                     return 4096
                 elif 'mistral' in self.model_name.lower():
@@ -103,11 +85,9 @@ class OllamaGenerator:
                 elif 'codellama' in self.model_name.lower():
                     return 16384
                 else:
-                    return 2048  # Conservative default
+                    return 2048
             
-            # Parse context length if found (this is a simplified parser)
-            # In practice, you might want more robust parsing
-            return 4096  # Default for now
+            return 4096
             
         except requests.exceptions.RequestException:
             logger.warning("Could not determine model context length, using default")
@@ -116,53 +96,42 @@ class OllamaGenerator:
     def _build_prompt(self, context: str, memory: List[str], story: str, action: str) -> str:
         """
         Build the complete prompt for the model.
-        This replaces the tokenization logic with simple text concatenation.
         """
-        # Combine memory into context
         memory_text = ' '.join(memory) if memory else ''
         full_context = f"{context} {memory_text}".strip()
         
-        # Build the complete prompt
         if story.strip():
             prompt = f"{full_context}\n\n{story}\n{action}"
         else:
             prompt = f"{full_context}\n{action}"
         
-        # Simple truncation if prompt is too long
-        # In a more sophisticated implementation, you might want to:
-        # 1. Estimate token count more accurately
-        # 2. Truncate intelligently (e.g., preserve recent context)
-        # 3. Use a proper tokenizer for the specific model
-        
-        max_chars = self.max_history_tokens * 4  # Rough estimate: 1 token ≈ 4 chars
+        max_chars = self.max_history_tokens * 4
         if len(prompt) > max_chars:
-            # Keep the context and recent story parts
             context_len = len(full_context)
             if context_len < max_chars // 2:
-                # Truncate from the beginning of the story
                 available_for_story = max_chars - context_len - len(action) - 10
                 if available_for_story > 0:
                     story_truncated = story[-available_for_story:].strip()
-                    # Try to cut at a sentence boundary
                     sentences = story_truncated.split('. ')
                     if len(sentences) > 1:
                         story_truncated = '. '.join(sentences[1:])
                     prompt = f"{full_context}\n\n{story_truncated}\n{action}"
                 else:
-                    # Fallback: just context and action
                     prompt = f"{full_context}\n{action}"
             else:
-                # Context itself is too long, truncate it
                 context_truncated = full_context[-max_chars//2:].strip()
                 prompt = f"{context_truncated}\n{action}"
         
         return prompt
     
     def _call_ollama(self, prompt: str, temperature: float, top_k: int, top_p: float, 
-                    repetition_penalty: float, stop_tokens: Optional[List[str]] = None) -> str:
+                    repetition_penalty: float, stop_tokens: Optional[List[str]] = None,
+                    num_predict: Optional[int] = None) -> str:
         """Make a generation request to Ollama."""
         
-        # Build Ollama request
+        # Use the provided num_predict, or fall back to the class default
+        final_num_predict = num_predict if num_predict is not None else self.generate_num
+
         request_data = {
             "model": self.model_name,
             "prompt": prompt,
@@ -172,11 +141,10 @@ class OllamaGenerator:
                 "top_k": top_k,
                 "top_p": top_p,
                 "repeat_penalty": repetition_penalty,
-                "num_predict": self.generate_num,
+                "num_predict": final_num_predict,
             }
         }
         
-        # Add stop tokens if provided
         if stop_tokens:
             request_data["options"]["stop"] = stop_tokens
         
@@ -187,7 +155,7 @@ class OllamaGenerator:
             response = requests.post(
                 f"{self.ollama_host}/api/generate",
                 json=request_data,
-                timeout=120  # Generous timeout for generation
+                timeout=120
             )
             response.raise_for_status()
             
@@ -222,22 +190,20 @@ class OllamaGenerator:
     ) -> str:
         """
         Generate raw text using Ollama.
-        This replaces the complex PyTorch-based generation logic.
         """
-        # Use provided parameters or defaults
         temperature = temperature if temperature is not None else self.temp
         top_k = top_k if top_k is not None else self.top_k
         top_p = top_p if top_p is not None else self.top_p
         repetition_penalty = repetition_penalty if repetition_penalty is not None else self.repetition_penalty
         
-        # Build the prompt
         full_prompt = f"{prompt}\n{context}".strip()
         
         logger.debug(f"Sending prompt to Ollama: {repr(full_prompt[:200])}")
         
-        # Generate text
+        # Pass the generate_num override to the call function
         generated_text = self._call_ollama(
-            full_prompt, temperature, top_k, top_p, repetition_penalty, stop_tokens
+            full_prompt, temperature, top_k, top_p, repetition_penalty, stop_tokens,
+            num_predict=generate_num
         )
         
         return generated_text
@@ -256,9 +222,7 @@ class OllamaGenerator:
     ) -> str:
         """
         Generate and format text for story continuation.
-        This maintains the same interface as GPT2Generator.generate().
         """
-        # Use provided parameters or defaults
         temperature = temperature if temperature is not None else self.temp
         top_k = top_k if top_k is not None else self.top_k
         top_p = top_p if top_p is not None else self.top_p
@@ -266,7 +230,6 @@ class OllamaGenerator:
         
         logger.debug(f"Generating with temp={temperature}, top_k={top_k}, top_p={top_p}, rep_pen={repetition_penalty}")
         
-        # Generate raw text
         text = self.generate_raw(
             context, 
             prompt, 
@@ -279,12 +242,9 @@ class OllamaGenerator:
         
         logger.debug(f"Raw generated result: {repr(text)}")
         
-        # Apply the same post-processing as the original
         result = self.result_replace(text)
         
-        # Handle empty generation with retries (matching original logic)
         if len(result) == 0 and depth < 6:
-            # Try again with allow_action=True after some retries
             result = self.result_replace(text, allow_action=True)
             logger.info(f"Empty generation, trying with allow_action=True: {repr(result)}")
         
@@ -301,7 +261,7 @@ class OllamaGenerator:
     
     def result_replace(self, result: str, allow_action: bool = False) -> str:
         """
-        Post-process generated text (copied from original GPT2Generator).
+        Post-process generated text.
         """
         result = cut_trailing_sentence(result, allow_action=allow_action)
 
@@ -323,33 +283,29 @@ class OllamaGenerator:
 def get_generator():
     """
     Factory function to create an Ollama generator.
-    This replaces the original get_generator() function in play.py.
     """
     output("\nInitializing Ollama AI Engine!", "loading-message", end="\n\n")
-
-    # Get host from settings or environment
+    
     ollama_host = get_ollama_host()
     model_name = None
-
-    # Get available models from Ollama
+    
     try:
         response = requests.get(f"{ollama_host}/api/tags", timeout=10)
         response.raise_for_status()
         models_data = response.json()
         available_models = [model['name'] for model in models_data.get('models', [])]
-
+        
         if not available_models:
             output("No models found in Ollama. Please pull a model first:", "error")
             output("Example: ollama pull llama2", "message")
             output("Then restart this application.", "message")
             exit(1)
-
+        
     except requests.exceptions.RequestException:
         output("Cannot connect to Ollama. Make sure it's running at " + ollama_host, "error")
         output("Start Ollama with: ollama serve", "message")
         exit(1)
 
-    # Check if the configured model exists
     configured_model = get_ollama_model()
     if configured_model in available_models:
         logger.info(f"Using configured model: {configured_model}")
@@ -364,14 +320,14 @@ def get_generator():
             for i, model in enumerate(available_models):
                 output(f"{i}) {model}", "menu")
             output(f"{len(available_models)}) Exit", "menu")
-
+            
             while True:
                 try:
                     selection = input("Select a model: ").strip()
                     if not selection:
                         selection = "0"
                     selection = int(selection)
-
+                    
                     if selection == len(available_models):
                         output("Exiting.", "message")
                         exit(0)
@@ -382,7 +338,7 @@ def get_generator():
                         output("Invalid selection.", "error")
                 except ValueError:
                     output("Please enter a number.", "error")
-
+    
     try:
         generator = OllamaGenerator(
             model_name=model_name,
@@ -402,34 +358,21 @@ def get_generator():
         exit(1)
 
 
-# Modified version of memory_merge for text-based context management
 def memory_merge(prompt: str, context: str, max_length: int = 2000) -> str:
     """
-    Simple text-based context merging to replace tokenization-based approach.
-    
-    Args:
-        prompt: The main prompt
-        context: Additional context 
-        max_length: Maximum character length (rough approximation)
-    
-    Returns:
-        Combined text suitable for generation
+    Simple text-based context merging.
     """
     combined = f"{prompt}\n{context}".strip()
     
-    # Simple truncation if too long
     if len(combined) > max_length:
-        # Try to keep the prompt intact and truncate context
         if len(prompt) < max_length // 2:
             available = max_length - len(prompt) - 10
             context_truncated = context[-available:] if available > 0 else ""
-            # Try to cut at word boundary
             words = context_truncated.split()
             if len(words) > 1:
                 context_truncated = ' '.join(words[1:])
             combined = f"{prompt}\n{context_truncated}".strip()
         else:
-            # Prompt itself is too long
             combined = prompt[-max_length:].strip()
     
     return combined

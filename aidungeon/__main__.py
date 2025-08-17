@@ -16,10 +16,6 @@ from aidungeon.play import GameManager
 def main():
     """Main entry point for AI Dungeon Clover Edition (Ollama)."""
 
-    # Clover ascii art
-    with open(Path("interface/", "clover"), "r", encoding="utf-8") as file_:
-        print(file_.read())
-
     # AIDungeon banner
     with open(Path("interface/", "mainTitle.txt"), "r", encoding="utf-8") as file:
         output(file.read(), "title", wrap=False, beg='')

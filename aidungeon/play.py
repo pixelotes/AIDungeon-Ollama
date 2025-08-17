@@ -1,18 +1,92 @@
-# aidungeon/play.py (updated for Ollama)
+# aidungeon/play.py
 from pathlib import Path
 import os
 import re
 import random
 
-from .getconfig import config, setting_info, get_ollama_host, get_ollama_model
+from .getconfig import config, setting_info, get_ollama_host, get_ollama_model, logger, settings
 from .storymanager import Story
 from .utils import *
 from .ollamagenerator import OllamaGenerator, get_generator
 from .interface import instructions
 
+# Keyword dictionary for simple state-based action suggestions
+KEYWORD_ACTIONS = {
+    "door": ["Try to open the door", "Knock on the door", "Listen at the door", "Examine the door"],
+    "chest": ["Try to open the chest", "Look for a key for the chest", "Examine the chest"],
+    "key": ["Pick up the key", "Try using the key"],
+    "enemy": ["Attack the enemy", "Try to sneak past the enemy", "Attempt to talk to the enemy"],
+    "creature": ["Attack the creature", "Observe the creature from a distance"],
+    "sword": ["Pick up the sword", "Inspect the sword"],
+    "book": ["Read the book", "Skim through the book", "Look for a title on the book's spine"],
+    "note": ["Read the note", "Pick up the note"],
+    "light": ["Approach the light", "Investigate the source of the light"],
+    "path": ["Follow the path", "Examine the path for tracks"],
+}
 
-# Remove the old get_generator function and replace with Ollama version
-# The new get_generator is imported from ollamagenerator.py
+# Dictionary for inventory-based conditional suggestions
+INVENTORY_SUGGESTIONS = {
+    "locked door": { "item": "key", "action": "Try to unlock the door with the key"},
+    "locked chest": { "item": "key", "action": "Try to unlock the chest with the key"},
+    "darkness": { "item": "torch", "action": "Light your torch"},
+    "dark room": { "item": "lantern", "action": "Light your lantern"},
+    "tangled vines": { "item": "machete", "action": "Cut through the vines with your machete"},
+}
+
+
+def generate_random_prompt(generator):
+    """Uses the AI to generate a random story prompt."""
+    output("\nGenerating a random story from the AI...", "loading-message")
+    themes = ["Sci-Fi", "Fantasy", "Horror", "Post-Apocalyptic", "Spy Thriller", "Victorian Mystery", "Pulp Adventure", "Cyberpunk", "Isekai"]
+    chosen_theme = random.choice(themes)
+
+    prompt_for_ai = (
+        f"You are a creative assistant. Generate a random story prompt for a text-based adventure game with a '{chosen_theme}' theme.\n"
+        "The prompt must consist of two paragraphs separated by '|||'. Keep the total response under 150 words.\n"
+        "The first paragraph is the context that introduces a character and setting.\n"
+        "The second paragraph is the first action the character takes, and it should end with a comma or without final punctuation.\n"
+        "Do not include any other text, comments, or confirmation; only provide the two-paragraph output.\n\n"
+        "EXAMPLE:\n"
+        "I am a cyber-scavenger in the neon-drenched ruins of Neo-City, hunted by corporate enforcers after a data heist went wrong. My only chance is to find the rogue AI known as 'Echo' in the underbelly of the city.|||I pull my cloak tighter to hide from the perpetual acid rain and slip into the shadows of a crowded alley,"
+    )
+
+    full_prompt_text = generator.generate_raw(
+        prompt_for_ai,
+        temperature=1.0,
+        generate_num=500,  # Increased token limit
+    )
+
+    # For debug purposes, save the raw output to a file
+    try:
+        save_path = Path("prompts", "random_story.txt")
+        with save_path.open('w', encoding='utf-8') as f:
+            f.write(full_prompt_text)
+        logger.info("Saved raw random prompt response to prompts/random_story.txt")
+    except IOError as e:
+        logger.error(f"Failed to save debug random story file: {e}")
+        output("Warning: Could not save debug file 'random_story.txt'.", "error")
+
+    # Relaxed parsing logic
+    context, first_action = None, None
+    if '|||' in full_prompt_text:
+        # First, try the explicit separator
+        parts = full_prompt_text.split('|||', 1)
+        if len(parts) == 2:
+            context, first_action = parts
+    elif '\n\n' in full_prompt_text:
+        # Fallback to double newline if separator is missing
+        parts = full_prompt_text.split('\n\n', 1)
+        if len(parts) == 2:
+            context, first_action = parts
+
+    if context and first_action:
+        return context.strip(), first_action.strip()
+    else:
+        # If both parsing methods fail
+        output("Error: The AI failed to generate a valid random prompt. Please try again.", "error")
+        output("Check prompts/random_story.txt for the raw AI output.", "message")
+        return None, None
+
 
 def d20ify_speech(action, d):
     """Add D20 flavor to speech actions."""
@@ -281,15 +355,37 @@ class GameManager:
         self.generator = gen
         self.story, self.context, self.prompt = None, None, None
 
+    def get_state_based_suggestions(self):
+        """Parse the last result for keywords and return relevant actions."""
+        if not self.story or not self.story.results:
+            return []
+
+        last_result = self.story.results[-1].lower()
+        found_actions = []
+
+        # Check for inventory-based suggestions first
+        for trigger, data in INVENTORY_SUGGESTIONS.items():
+            if trigger in last_result and self.story.character.has_item(data["item"]):
+                found_actions.append(data["action"])
+
+        # Check for simple keyword actions
+        for keyword, actions in KEYWORD_ACTIONS.items():
+            if keyword in last_result:
+                found_actions.extend(actions)
+        
+        # Return unique actions while preserving order
+        return list(dict.fromkeys(found_actions))
+
     def init_story(self) -> bool:
         """Initialize the story. Called by play_story."""
         self.story, self.context, self.prompt = None, None, None
         list_items(["Pick Prompt From File (Default if you type nothing)",
                     "Write Custom Prompt",
                     "Load a Saved Game",
+                    "Generate Random Story",
                     "Change Settings"],
                    'menu')
-        new_game_option = input_number(3)
+        new_game_option = input_number(4)
 
         if new_game_option == 0:
             prompt_file = select_file(Path("prompts"), ".txt")
@@ -325,6 +421,10 @@ class GameManager:
             else:
                 return False
         elif new_game_option == 3:
+            self.context, self.prompt = generate_random_prompt(self.generator)
+            if self.context is None:
+                return False
+        elif new_game_option == 4:
             settings_menu()
             return False
 
@@ -376,7 +476,7 @@ class GameManager:
                 if input_bool("Save setting? (y/N): ", "selection-prompt"):
                     settings[args[0]] = args[1]
                     try:
-                        with open("config.ini", "w", encoding="utf-8") as f:
+                        with open("config.ini", "w", encoding="utf-8") as file:
                             config.write(f)
                     except IOError:
                         output("Permission error! Changes will not be saved for next session.", "error")
@@ -441,6 +541,16 @@ class GameManager:
             self.story.revert()
             output("Last action reverted. ", "message")
             self.story.print_last()
+        
+        elif command in ["sheet", "char", "inventory"]:
+            self.story.character.display()
+
+        elif command == "drop":
+            item_to_drop = " ".join(args)
+            if not item_to_drop:
+                output("You need to specify what to drop. Usage: /drop [item name]", "error")
+            else:
+                self.story.character.remove_item(item_to_drop)
 
         elif command == "alter":
             self.story.results[-1] = alter_text(self.story.results[-1])
@@ -632,24 +742,44 @@ class GameManager:
 
     def play_story(self):
         """The main in-game loop."""
-        if not self.init_story():  # Failed init
+        if not self.init_story():
             return
 
+        command_was_run = False
+
         while True:
-            # Generate suggested actions
             act_alts = settings.getint("action-sugg")
             suggested_actions = []
-            if act_alts > 0:
-                output("Suggested actions:", "selection-value")
-                action_suggestion_lines = 2
-                for i in range(act_alts):
-                    suggested_action = self.story.get_suggestion()
-                    if len(suggested_action.strip()) > 0:
-                        j = len(suggested_actions)
-                        suggested_actions.append(suggested_action)
-                        suggestion = "{}) {}".format(j, suggested_action)
+            action_suggestion_lines = 0
+            
+            if act_alts > 0 and not command_was_run:
+                # Get state-based (contextual and inventory) suggestions
+                state_suggestions = self.get_state_based_suggestions()
+                
+                # Get AI-generated suggestions, making them aware of previous ones
+                ai_suggestions = []
+                num_ai_to_gen = act_alts - len(state_suggestions)
+                if num_ai_to_gen > 0:
+                    for _ in range(num_ai_to_gen):
+                        # Combine all current suggestions to avoid generating duplicates
+                        current_suggestions_for_prompt = state_suggestions + ai_suggestions
+                        new_suggestion = self.story.get_suggestion(previous_suggestions=current_suggestions_for_prompt)
+                        if new_suggestion.strip():
+                            ai_suggestions.append(new_suggestion)
+                
+                # Combine and display
+                combined_suggestions = state_suggestions + ai_suggestions
+                unique_suggestions = list(dict.fromkeys(combined_suggestions))
+                suggested_actions = unique_suggestions[:act_alts]
+
+                if suggested_actions:
+                    action_suggestion_lines += output("Suggested actions:", "selection-value")
+                    for i, suggestion in enumerate(suggested_actions):
+                        line = "{}) {}".format(i, suggestion)
                         action_suggestion_lines += \
-                            output(suggestion, "selection-value", beg='' if i != 0 else None)
+                            output(line, "selection-value", beg='' if i != 0 else None)
+            
+            command_was_run = False
 
             bell()
             print()
@@ -659,23 +789,19 @@ class GameManager:
             else:
                 action = input_line("> You ", "main-prompt")
 
-            # Clear suggestions and user input
-            if act_alts and not in_colab():
+            if settings.getboolean("clear-suggestions") and action_suggestion_lines > 0 and not in_colab():
+                # The +2 accounts for the blank line from print() and the user's input line
                 clear_lines(action_suggestion_lines + 2)
 
-            # Users can type in "/command", or "You /command" if prompt_toolkit is on and they left the "You" in
             cmd_regex = re.search(r"^(?: *you *)?/([^ ]+) *(.*)$", action, flags=re.I)
 
-            # If this is a command
             if cmd_regex:
-                if self.process_command(cmd_regex):  # Go back to the menu
+                command_was_run = True
+                if self.process_command(cmd_regex):
                     return
-
-            # Otherwise this is just a normal action.
             else:
-                if self.process_action(action, suggested_actions):  # End of story
+                if self.process_action(action, suggested_actions):
                     return
 
-            # Autosave after every input from the user (if it's enabled)
             if settings.getboolean("autosave"):
                 save_story(self.story, file_override=self.story.savefile, autosave=True)

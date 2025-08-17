@@ -1,0 +1,11 @@
+services:
+  aidungeon-web:
+    build: .
+    ports:
+      - "8080:8080"
+      - "8765:8765"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - ./saves:/app/saves
+      - ./prompts:/app/prompts

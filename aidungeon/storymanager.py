@@ -1,7 +1,8 @@
 import json
 import re
-from .getconfig import settings
+from .getconfig import settings, logger
 from .utils import output, format_result, format_input, get_similarity
+from .charactersheet import CharacterSheet
 
 
 class Story:
@@ -19,18 +20,64 @@ class Story:
         self.actions = []
         self.results = []
         self.savefile = ""
+        self.character = CharacterSheet()
+        # Constants for the summarization feature
+        self.SUMMARIZE_THRESHOLD = 10
+        self.STORY_CHUNK_SIZE = 8
+
+    def find_and_update_inventory(self, text):
+        """Parses text to find items acquired by the player."""
+        match = re.search(r"you (?:pick up|take|acquire|get|find) (?:the|a|an) ([\w\s]+)", text, flags=re.I)
+        if match:
+            item_name = match.group(1).strip()
+            item_name = item_name.split('.')[0].split(',')[0].strip()
+            if item_name:
+                self.character.add_item(item_name)
+
+    def summarize_chunk(self):
+        """Summarizes the oldest chunk of the story and prepends it to the context."""
+        logger.info("Attempting to summarize story chunk...")
+        chunk_actions = self.actions[:self.STORY_CHUNK_SIZE]
+        chunk_results = self.results[:self.STORY_CHUNK_SIZE]
+        story_chunk_text = "\n\n".join([val for pair in zip(chunk_actions, chunk_results) for val in pair])
+        prompt = (
+            "Concisely summarize the key events, characters, and outcomes from the "
+            f"following story passage in one or two sentences:\n\n---\n\n{story_chunk_text}"
+        )
+        summary = self.generator.generate_raw(
+            prompt,
+            context="",
+            temperature=0.5,
+            generate_num=100,
+        ).strip()
+        if not summary:
+            logger.warning("Failed to generate story summary. Skipping.")
+            return
+        separator = "\n" if self.context else ""
+        self.context = f"{self.context}{separator}[Previously: {summary}]"
+        self.actions = self.actions[self.STORY_CHUNK_SIZE:]
+        self.results = self.results[self.STORY_CHUNK_SIZE:]
+        logger.info("Story chunk summarized and pruned.")
+        logger.debug(f"New context: {self.context}")
 
     def act(self, action, record=True, format=True):
         """Generate the next part of the story based on an action."""
         assert (self.context.strip() + action.strip())
         assert (settings.getint('top-keks') is not None)
         
-        # Build the story context for generation
         story_so_far = self.get_story()
         memory_context = ' '.join(self.memory)
-        full_context = f"{self.context} {memory_context}".strip()
+        base_context = f"{self.context} {memory_context}".strip()
+
+        # Add a system prompt to guide the AI's behavior for story generation
+        instructions = (
+            "You are a master storyteller acting as a text adventure game engine. "
+            "Continue the narrative based on the user's action. "
+            "Do not break character. Do not add any meta-commentary, conversational filler, or out-of-game remarks like 'Okay, let's continue'. "
+            "Directly describe the outcome of the action and the current state of the world to move the story forward."
+        )
+        full_context = f"[System Prompt: {instructions}]\n\n{base_context}"
         
-        # Generate the result
         result = self.generator.generate(
             story_so_far + action,
             full_context,
@@ -42,9 +89,15 @@ class Story:
             repetition_penalty_slope=settings.getfloat('rep-pen-slope')
         )
         
+        self.find_and_update_inventory(result)
+        if "!" in action:
+            self.find_and_update_inventory(action)
+
         if record:
             self.actions.append(format_input(action))
             self.results.append(format_input(result))
+            if len(self.actions) > self.SUMMARIZE_THRESHOLD:
+                self.summarize_chunk()
         
         return format_result(result) if format else result
 
@@ -56,8 +109,8 @@ class Story:
         if i == 0 or len(self.actions) == 1:
             start = format_result(self.context + ' ' + self.actions[0])
             result = format_result(self.results[0])
-            is_start_end = re.match(r"[.!?]\s*$", start)  # if start ends logically
-            is_result_continue = re.match(r"^\s*[a-z.!?,\"]", result)  # if result is a continuation
+            is_start_end = re.match(r"[.!?]\s*$", start)
+            is_result_continue = re.match(r"^\s*[a-z.!?,\"]", result)
             sep = ' ' if not is_start_end and is_result_continue else '\n'
             
             if not self.actions[0]:
@@ -91,27 +144,46 @@ class Story:
         self.actions = self.actions[:-1]
         self.results = self.results[:-1]
 
-    def get_suggestion(self):
-        """Generate a suggested action."""
-        # Use a different temperature for action suggestions
-        suggestion_prompt = self.get_story() + "\n\n> You"
+    def get_suggestion(self, previous_suggestions=None):
+        """Generate a suggested action, providing examples and avoiding similarity to previous suggestions."""
+        if previous_suggestions is None:
+            previous_suggestions = []
+
+        story_text = self.get_story()
+        
+        examples = (
+            "Here are some examples of good actions:\n"
+            "- You go north.\n"
+            "- You pick up the sword.\n"
+            "- You talk to the bartender.\n"
+            "- You examine your surroundings."
+        )
+
+        instruction = "What do you do next? Please provide a short, single-action command for the player."
+        
+        exclusion_prompt = ""
+        if previous_suggestions:
+            exclusion_header = "\n\nAvoid generating actions similar to these:"
+            exclusions = "\n".join([f"- You {s}" for s in previous_suggestions])
+            exclusion_prompt = f"{exclusion_header}\n{exclusions}"
+
+        suggestion_prompt = f"{story_text}\n\n{instruction}\n\n{examples}{exclusion_prompt}\n\n> You"
         
         suggestion = self.generator.generate_raw(
             suggestion_prompt,
             self.context,
+            generate_num=15,
             temperature=settings.getfloat('action-temp'),
             top_p=settings.getfloat('top-p'),
             top_k=settings.getint('top-keks'),
-            repetition_penalty=1.0  # Lower repetition penalty for more variety in suggestions
+            repetition_penalty=1.2,
+            stop_tokens=["\n", "."]
         )
         
-        # Clean up the suggestion
-        suggestion = re.sub('\n.*', '', suggestion)  # Take only first line
         suggestion = suggestion.strip()
-        
-        # Remove "You " prefix if present since it will be added later
-        suggestion = re.sub(r'^You\s+', '', suggestion, flags=re.I)
-        
+        suggestion = re.sub(r'^(?:You\s+)?', '', suggestion, flags=re.I).strip()
+        suggestion = re.sub(r'^\s*[-*1-9]\.?\s*', '', suggestion)
+
         return suggestion
 
     def __str__(self):
@@ -130,7 +202,7 @@ class Story:
         res["memory"] = self.memory
         res["actions"] = self.actions
         res["results"] = self.results
-        # Add generator info for Ollama
+        res["character_sheet"] = self.character.to_dict()
         if hasattr(self.generator, 'model_name'):
             res["model_name"] = self.generator.model_name
             res["ollama_host"] = self.generator.ollama_host
@@ -153,8 +225,8 @@ class Story:
         self.memory = d["memory"]
         self.actions = d["actions"]
         self.results = d["results"]
-        
-        # Note: Model info is saved but generator needs to be set up separately
+        if "character_sheet" in d:
+            self.character.from_dict(d["character_sheet"])
 
     def to_json(self):
         """Convert story to JSON string."""

@@ -1,2 +1,4 @@
 prompt_toolkit
 requests
+pexpect
+websockets

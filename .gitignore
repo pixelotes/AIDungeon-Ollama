@@ -1,0 +1,15 @@
+**/__pycache__
+*.py[cod]
+venv/
+saves/*
+story*.json
+!*.gitkeep
+/prompts/*
+!/prompts/cloveranon-prompts/*
+/generator/gpt2/models/*
+/models/*
+!/models/.gitkeep
+.vscode/
+.idea/
+.python-version
+config.ini

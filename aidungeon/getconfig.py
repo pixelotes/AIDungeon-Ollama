@@ -48,12 +48,11 @@ setting_info = {
     "generate-num":     ["Approximate number of tokens to generate.", 60],
     "top-p":            ["Changes nucleus sampling threshold.", 0.9],
     "log-level":        ["Development log level. <30 is for developers.", 30],
+    "clear-suggestions":["Clears the suggestion list after you make a choice.", "on"],
     # Ollama-specific settings
     "ollama-host":      ["Ollama server URL.", "http://localhost:11434"],
     "ollama-model":     ["Default Ollama model to use.", "llama2:7b"],
     "ollama-timeout":   ["Timeout for Ollama requests in seconds.", 120],
-    # Remove GPU/PyTorch specific settings
-    # "force-cpu" and GPU-related settings are no longer needed
 }
 
 # Add Ollama-specific environment variable support

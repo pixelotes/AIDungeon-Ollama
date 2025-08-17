@@ -1,2 +1,3 @@
 #!/usr/bin/env bash
-venv/bin/python launch.py
+pip install -r ./requirements.txt
+python -m aidungeon

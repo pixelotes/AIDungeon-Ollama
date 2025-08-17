@@ -17,6 +17,8 @@ def instructions():
     print('  "/retry"                 Retries the last action')
     print('  "/restart"               Restarts the current story')
     print('  "/print"                 Prints a transcript of your adventure (without extra newline formatting)')
+    print('  "/sheet"                 Displays your character sheet and inventory.')
+    print('  "/drop [ITEM]"           Drops an item from your inventory.')
     print('  "/alter"                 Edit the last prompt from the AI')
     print('  "/altergen"              Edit the last result from the AI and have it generate the rest')
     print('  "/context"               Edit the story\'s permanent context paragraph')
