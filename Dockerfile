@@ -7,6 +7,9 @@ WORKDIR /app
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV OLLAMA_HOST=http://host.docker.internal:11434
+ENV OLLAMA_MODEL=llama2:7b
+ENV OLLAMA_TIMEOUT=120
+ENV ACTION_SUGGESTIONS=3
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
