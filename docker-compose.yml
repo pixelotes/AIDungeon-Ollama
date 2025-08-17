@@ -6,6 +6,9 @@ services:
       - "8765:8765"
     environment:
       - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=gemma:2b
+      - OLLAMA_TIMEOUT=180
+      - ACTION_SUGGESTIONS=4
     volumes:
       - ./saves:/app/saves
       - ./prompts:/app/prompts
