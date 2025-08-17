@@ -27,6 +27,11 @@ logging.basicConfig(
 )
 logger.setLevel(logLevel)
 
+"""
+Settings descriptions and their default values keyed by their name.
+These settings appear in the settings menu and the /help prompt.
+Updated for Ollama backend.
+"""
 setting_info = {
     "temp":             ["Higher values make the AI more random.", 0.4],
     "rep-pen":          ["Controls how repetitive the AI is allowed to be.", 1.2],
@@ -44,30 +49,25 @@ setting_info = {
     "top-p":            ["Changes nucleus sampling threshold.", 0.9],
     "log-level":        ["Development log level. <30 is for developers.", 30],
     "clear-suggestions":["Clears the suggestion list after you make a choice.", "on"],
-    
-    # API settings
-    "api_base_url":     ["API endpoint URL.", "http://localhost:11434"],
-    "api_key":          ["API key for the service.", "ollama"],
-    "model":            ["Default model to use.", "llama2:7b"],
-    "timeout":          ["Timeout for API requests in seconds.", 120],
+    # Ollama-specific settings
+    "ollama-host":      ["Ollama server URL.", "http://localhost:11434"],
+    "ollama-model":     ["Default Ollama model to use.", "llama2:7b"],
+    "ollama-timeout":   ["Timeout for Ollama requests in seconds.", 120],
 }
 
-def get_api_base_url():
-    """Get API base URL from environment, falling back to settings."""
-    return os.environ.get("API_BASE_URL", settings.get("api_base_url", "http://localhost:11434"))
+# Add Ollama-specific environment variable support
+def get_ollama_host():
+    """Get Ollama host from settings or environment."""
+    return os.environ.get("OLLAMA_HOST", settings.get("ollama-host", "http://localhost:11434"))
 
-def get_api_key():
-    """Get API key from environment, falling back to settings."""
-    return os.environ.get("API_KEY", settings.get("api_key", "ollama"))
+def get_ollama_model():
+    """Get Ollama model from environment, falling back to settings."""
+    return os.environ.get("OLLAMA_MODEL", settings.get("ollama-model", "llama2:7b"))
 
-def get_model():
-    """Get model name from environment, falling back to settings."""
-    return os.environ.get("MODEL", settings.get("model", "llama2:7b"))
-
-def get_timeout():
-    """Get timeout from environment, falling back to settings."""
-    default_timeout = settings.getint("timeout", 120)
-    return int(os.environ.get("TIMEOUT", default_timeout))
+def get_ollama_timeout():
+    """Get Ollama timeout from environment, falling back to settings."""
+    default_timeout = settings.getint("ollama-timeout", 120)
+    return int(os.environ.get("OLLAMA_TIMEOUT", default_timeout))
 
 def get_action_suggestions():
     """Get the number of action suggestions from environment, falling back to settings."""
@@ -75,8 +75,8 @@ def get_action_suggestions():
     return int(os.environ.get("ACTION_SUGGESTIONS", default_suggestions))
 
 # Update the settings object with values that might come from environment variables
-settings["api_base_url"] = get_api_base_url()
-settings["api_key"] = get_api_key()
-settings["model"] = get_model()
-settings["timeout"] = str(get_timeout())
+# This ensures consistency when the settings are displayed in the /help menu
+settings["ollama-host"] = get_ollama_host()
+settings["ollama-model"] = get_ollama_model()
+settings["ollama-timeout"] = str(get_ollama_timeout())
 settings["action-sugg"] = str(get_action_suggestions())
