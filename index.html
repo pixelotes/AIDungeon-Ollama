@@ -9,51 +9,147 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
 
     <style>
+        /* Import a retro-style monospace font from Google Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        :root {
+            --crt-glow-color: #00ff00;
+            --crt-background-color: #0c0c0c;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+        
         html, body {
             height: 100%;
             background-color: #1a1a1a;
+            color: #00ff00;
+            font-family: 'Courier New', monospace; /* Default font */
         }
+
         body {
-            font-family: 'Courier New', monospace;
             display: flex;
             flex-direction: column;
         }
-        .header {
-            background: #333;
-            color: #fff;
-            padding: 10px;
-            text-align: center;
-            border-bottom: 2px solid #555;
-            flex-shrink: 0;
+        
+        /* NEW --- Default body background */
+        body {
+            background-color: #1a1a1a;
         }
+
+        /* NEW --- CRT Mode Styles */
+        body.crt-on {
+            font-family: 'VT323', monospace;
+            background-color: var(--crt-background-color);
+            color: var(--crt-glow-color);
+        }
+
+        .header {
+            background: #111;
+            color: #fff;
+            padding: 5px;
+            text-align: center;
+            border-bottom: 2px solid #333;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        h1 {
+            font-size: 1.2rem;
+            flex-grow: 1;
+            text-align: center;
+        }
+
+        /* NEW --- Toggle Button Styling */
+        #crtToggle {
+            background: #444;
+            border: 1px solid #666;
+            color: #eee;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-family: sans-serif;
+            font-size: 12px;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        #crtToggle:hover {
+            background: #555;
+        }
+
         .terminal-container {
             flex-grow: 1;
             padding: 10px;
             overflow: hidden;
+            position: relative;
         }
+        
+        /* Flicker, scanlines, and vignette are only applied in CRT mode */
+        .crt-on .terminal-container {
+            animation: flicker 0.15s infinite;
+        }
+        
+        .crt-on .terminal-container::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 2;
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+        }
+        
+        .crt-on .terminal-container::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: radial-gradient(ellipse at center, rgba(0,0,0,0) 60%, rgba(0,0,0,0.7));
+            z-index: 3;
+            pointer-events: none;
+        }
+        
         #terminal {
             width: 100%;
             height: 100%;
         }
+
+        .xterm-viewport {
+            background-color: transparent !important;
+        }
+        
+        /* Text glow is only applied in CRT mode */
+        .crt-on .xterm .xterm-rows > div {
+            text-shadow: 0 0 4px var(--crt-glow-color);
+        }
+
         .status {
             padding: 5px 10px;
             text-align: center;
-            font-size: 12px;
+            font-size: 14px;
+            min-width: 120px;
         }
+
         .status.connected { color: #00ff00; background: #1a4a1a; }
         .status.disconnected { color: #ff0000; background: #4a1a1a; }
         .status.connecting { color: #ffff00; background: #4a4a1a; }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.95; }
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>AI Dungeon Clover Edition - Web Terminal</h1>
         <div id="status" class="status connecting">Connecting...</div>
+        <h1>AI Dungeon Clover Edition - Web Terminal</h1>
+        <button id="crtToggle">CRT Mode: Off</button>
     </div>
     <div id="terminal-container" class="terminal-container">
         <div id="terminal"></div>
@@ -65,7 +161,7 @@
                 this.term = new Terminal({
                     cursorBlink: true,
                     convertEol: true,
-                    fontFamily: `'Courier New', monospace`,
+                    // Use a default theme, which will be overridden by CRT styles
                     theme: {
                         background: '#000000',
                         foreground: '#00ff00',
@@ -83,7 +179,34 @@
                 this.fitAddon.fit();
 
                 this.setupEventListeners();
+                this.setupCrtToggle(); // NEW --- Initialize the toggle
                 this.connect();
+            }
+
+            // NEW --- All-new function to handle the CRT toggle
+            setupCrtToggle() {
+                const crtToggleButton = document.getElementById('crtToggle');
+                const body = document.body;
+                
+                // Function to update button text
+                const updateButtonText = () => {
+                    const isCrtOn = body.classList.contains('crt-on');
+                    crtToggleButton.textContent = `CRT Mode: ${isCrtOn ? 'On' : 'Off'}`;
+                };
+
+                // Apply saved setting on load
+                const savedCrtMode = localStorage.getItem('crtMode');
+                if (savedCrtMode === 'true') {
+                    body.classList.add('crt-on');
+                }
+                updateButtonText(); // Set initial button text
+
+                // Add click listener
+                crtToggleButton.addEventListener('click', () => {
+                    body.classList.toggle('crt-on');
+                    localStorage.setItem('crtMode', body.classList.contains('crt-on'));
+                    updateButtonText(); // Update text on click
+                });
             }
 
             setupEventListeners() {
