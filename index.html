@@ -4,171 +4,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Dungeon Clover Edition - Web Terminal</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
+        html, body {
+            height: 100%;
+            background-color: #1a1a1a;
+        }
         body {
             font-family: 'Courier New', monospace;
-            background: #1a1a1a;
-            color: #00ff00;
-            height: 100vh;
             display: flex;
             flex-direction: column;
         }
-
         .header {
             background: #333;
             color: #fff;
             padding: 10px;
             text-align: center;
             border-bottom: 2px solid #555;
+            flex-shrink: 0;
         }
-
         .terminal-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
+            flex-grow: 1;
             padding: 10px;
             overflow: hidden;
         }
-
-        .terminal {
-            flex: 1;
-            background: #000;
-            border: 2px solid #333;
-            border-radius: 5px;
-            padding: 10px;
-            font-size: 14px;
-            line-height: 1.4;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            resize: none;
-            outline: none;
+        #terminal {
+            width: 100%;
+            height: 100%;
         }
-
-        .input-container {
-            display: flex;
-            margin-top: 10px;
-            gap: 10px;
-        }
-
-        .input-field {
-            flex: 1;
-            background: #222;
-            color: #00ff00;
-            border: 2px solid #555;
-            border-radius: 5px;
-            padding: 10px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            outline: none;
-        }
-
-        .input-field:focus {
-            border-color: #00ff00;
-        }
-
-        .send-button {
-            background: #555;
-            color: #fff;
-            border: 2px solid #777;
-            border-radius: 5px;
-            padding: 10px 20px;
-            cursor: pointer;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
-
-        .send-button:hover {
-            background: #777;
-        }
-
-        .send-button:active {
-            background: #999;
-        }
-
         .status {
             padding: 5px 10px;
             text-align: center;
             font-size: 12px;
         }
-
-        .status.connected {
-            color: #00ff00;
-            background: #1a4a1a;
-        }
-
-        .status.disconnected {
-            color: #ff0000;
-            background: #4a1a1a;
-        }
-
-        .status.connecting {
-            color: #ffff00;
-            background: #4a4a1a;
-        }
-
-        /* ANSI color support - simplified and more reliable */
-        .ansi-black { color: #666; }
-        .ansi-red { color: #ff6b6b; }
-        .ansi-green { color: #51cf66; }
-        .ansi-yellow { color: #ffd43b; }
-        .ansi-blue { color: #74c0fc; }
-        .ansi-magenta { color: #d0bfff; }
-        .ansi-cyan { color: #66d9ef; }
-        .ansi-white { color: #f8f9fa; }
-        
-        .ansi-bright-red { color: #ff8787; }
-        .ansi-bright-green { color: #8ce99a; }
-        .ansi-bright-yellow { color: #ffec99; }
-        .ansi-bright-blue { color: #91a7ff; }
-        .ansi-bright-magenta { color: #e599f7; }
-        .ansi-bright-cyan { color: #99e9f2; }
-        .ansi-bright-white { color: #ffffff; }
-
-        /* Reverse video styles - specific classes for each color */
-        .ansi-reverse-red { background-color: #ff6b6b; color: #000; padding: 2px 4px; }
-        .ansi-reverse-green { background-color: #51cf66; color: #000; padding: 2px 4px; }
-        .ansi-reverse-yellow { background-color: #ffd43b; color: #000; padding: 2px 4px; }
-        .ansi-reverse-blue { background-color: #74c0fc; color: #000; padding: 2px 4px; }
-        .ansi-reverse-magenta { background-color: #d0bfff; color: #000; padding: 2px 4px; }
-        .ansi-reverse-cyan { background-color: #66d9ef; color: #000; padding: 2px 4px; }
-        .ansi-reverse-white { background-color: #f8f9fa; color: #000; padding: 2px 4px; }
-
-        /* Mobile responsive */
-        @media (max-width: 768px) {
-            .terminal {
-                font-size: 12px;
-            }
-            .input-field, .send-button {
-                font-size: 12px;
-                padding: 8px;
-            }
-        }
-
-        /* Scrollbar styling */
-        .terminal::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .terminal::-webkit-scrollbar-track {
-            background: #1a1a1a;
-        }
-
-        .terminal::-webkit-scrollbar-thumb {
-            background: #555;
-            border-radius: 4px;
-        }
-
-        .terminal::-webkit-scrollbar-thumb:hover {
-            background: #777;
-        }
+        .status.connected { color: #00ff00; background: #1a4a1a; }
+        .status.disconnected { color: #ff0000; background: #4a1a1a; }
+        .status.connecting { color: #ffff00; background: #4a4a1a; }
     </style>
 </head>
 <body>
@@ -176,59 +55,53 @@
         <h1>AI Dungeon Clover Edition - Web Terminal</h1>
         <div id="status" class="status connecting">Connecting...</div>
     </div>
-
-    <div class="terminal-container">
-        <div id="terminal" class="terminal" tabindex="0"></div>
-        
-        <div class="input-container">
-            <input type="text" id="input" class="input-field" placeholder="Enter your command or action..." autocomplete="off">
-            <button id="send" class="send-button">Send</button>
-        </div>
+    <div id="terminal-container" class="terminal-container">
+        <div id="terminal"></div>
     </div>
 
     <script>
         class WebTerminal {
             constructor() {
-                this.terminal = document.getElementById('terminal');
-                this.input = document.getElementById('input');
-                this.sendButton = document.getElementById('send');
+                this.term = new Terminal({
+                    cursorBlink: true,
+                    convertEol: true,
+                    fontFamily: `'Courier New', monospace`,
+                    theme: {
+                        background: '#000000',
+                        foreground: '#00ff00',
+                    }
+                });
+                this.fitAddon = new FitAddon.FitAddon();
+                this.term.loadAddon(this.fitAddon);
+
                 this.status = document.getElementById('status');
-                
                 this.ws = null;
                 this.reconnectAttempts = 0;
                 this.maxReconnectAttempts = 5;
-                
+
+                this.term.open(document.getElementById('terminal'));
+                this.fitAddon.fit();
+
                 this.setupEventListeners();
                 this.connect();
             }
-            
+
             setupEventListeners() {
-                // Send button click
-                this.sendButton.addEventListener('click', () => this.sendInput());
-                
-                // Enter key in input field
-                this.input.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        this.sendInput();
+                window.addEventListener('resize', () => this.fitAddon.fit());
+
+                this.term.onData(data => {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({ type: 'input', data: data }));
                     }
                 });
                 
-                // Focus input field when terminal is clicked
-                this.terminal.addEventListener('click', () => {
-                    this.input.focus();
-                });
-                
-                // Auto-focus input field on page load
-                window.addEventListener('load', () => {
-                    this.input.focus();
-                });
-                
-                // Handle window resize
-                window.addEventListener('resize', () => {
-                    this.sendResize();
+                this.term.onResize(({ cols, rows }) => {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({ type: 'resize', cols: cols, rows: rows }));
+                    }
                 });
             }
-            
+
             connect() {
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const wsUrl = `${protocol}//${window.location.hostname}:8765`;
@@ -237,189 +110,64 @@
                 
                 try {
                     this.ws = new WebSocket(wsUrl);
-                    
+
                     this.ws.onopen = () => {
                         this.updateStatus('connected', 'Connected');
                         this.reconnectAttempts = 0;
-                        this.sendResize();
+                        this.term.focus();
+                        this.term.onResize(({ cols, rows }) => {
+                           this.ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+                        });
                     };
-                    
+
                     this.ws.onmessage = (event) => {
                         try {
                             const message = JSON.parse(event.data);
-                            this.handleMessage(message);
+                            if (message.type === 'output') {
+                                this.term.write(message.data);
+                            } else if (message.type === 'error') {
+                                this.term.write(`\r\n[ERROR] ${message.data}\r\n`);
+                            }
                         } catch (e) {
                             console.error('Failed to parse message:', e);
                         }
                     };
-                    
+
                     this.ws.onclose = () => {
                         this.updateStatus('disconnected', 'Disconnected');
                         this.scheduleReconnect();
                     };
-                    
+
                     this.ws.onerror = (error) => {
                         console.error('WebSocket error:', error);
                         this.updateStatus('disconnected', 'Connection Error');
                     };
-                    
+
                 } catch (error) {
                     console.error('Failed to create WebSocket:', error);
-                    this.updateStatus('disconnected', 'Connection Failed');
                     this.scheduleReconnect();
                 }
-            }
-            
-            handleMessage(message) {
-                switch (message.type) {
-                    case 'output':
-                        this.appendOutput(message.data);
-                        break;
-                    case 'error':
-                        this.appendOutput(`\r\n[ERROR] ${message.data}\r\n`);
-                        break;
-                }
-            }
-            
-            appendOutput(text) {
-                // Process ANSI escape codes (basic implementation)
-                text = this.processAnsiCodes(text);
-                
-                this.terminal.innerHTML += text;
-                this.scrollToBottom();
-            }
-            
-            processAnsiCodes(text) {
-                try {
-                    // First escape HTML to prevent conflicts with ANSI processing
-                    text = text.replace(/&/g, '&amp;')
-                              .replace(/</g, '&lt;')
-                              .replace(/>/g, '&gt;')
-                              .replace(/"/g, '&quot;')
-                              .replace(/'/g, '&#x27;');
-                    
-                    // Normalize line endings
-                    text = text.replace(/\r\n/g, '\n');
-                    text = text.replace(/\r/g, '\n');
-                    
-                    // Process ANSI escape codes
-                    // Handle reset codes first
-                    text = text.replace(/\x1b\[0m/g, '</span>');
-                    text = text.replace(/\x1b\[m/g, '</span>');
-                    
-                    // Handle reverse video + colors ([7;XXm format)
-                    text = text.replace(/\x1b\[7;31m/g, '<span class="ansi-reverse-red">');
-                    text = text.replace(/\x1b\[7;32m/g, '<span class="ansi-reverse-green">');
-                    text = text.replace(/\x1b\[7;33m/g, '<span class="ansi-reverse-yellow">');
-                    text = text.replace(/\x1b\[7;34m/g, '<span class="ansi-reverse-blue">');
-                    text = text.replace(/\x1b\[7;35m/g, '<span class="ansi-reverse-magenta">');
-                    text = text.replace(/\x1b\[7;36m/g, '<span class="ansi-reverse-cyan">');
-                    text = text.replace(/\x1b\[7;37m/g, '<span class="ansi-reverse-white">');
-                    
-                    // Handle cursor movement and clearing codes
-                    text = text.replace(/\x1b\[1A\[\[2K/g, ''); // Clear previous line
-                    text = text.replace(/\x1b\[\d*A/g, ''); // Cursor up
-                    text = text.replace(/\x1b\[\d*B/g, ''); // Cursor down
-                    text = text.replace(/\x1b\[\d*C/g, ''); // Cursor forward
-                    text = text.replace(/\x1b\[\d*D/g, ''); // Cursor backward
-                    text = text.replace(/\x1b\[2K/g, ''); // Clear entire line
-                    text = text.replace(/\x1b\[K/g, ''); // Clear to end of line
-                    text = text.replace(/\x1b\[J/g, ''); // Clear to end of screen
-                    text = text.replace(/\x1b\[\d*;\d*H/g, ''); // Cursor position
-                    text = text.replace(/\x1b\[\d*;\d*f/g, ''); // Cursor position (alternate)
-
-                    // Handle basic colors
-                    text = text.replace(/\x1b\[31m/g, '<span class="ansi-red">');
-                    text = text.replace(/\x1b\[32m/g, '<span class="ansi-green">');
-                    text = text.replace(/\x1b\[33m/g, '<span class="ansi-yellow">');
-                    text = text.replace(/\x1b\[34m/g, '<span class="ansi-blue">');
-                    text = text.replace(/\x1b\[35m/g, '<span class="ansi-magenta">');
-                    text = text.replace(/\x1b\[36m/g, '<span class="ansi-cyan">');
-                    text = text.replace(/\x1b\[37m/g, '<span class="ansi-white">');
-                    
-                    // Handle bright colors
-                    text = text.replace(/\x1b\[91m/g, '<span class="ansi-bright-red">');
-                    text = text.replace(/\x1b\[92m/g, '<span class="ansi-bright-green">');
-                    text = text.replace(/\x1b\[93m/g, '<span class="ansi-bright-yellow">');
-                    text = text.replace(/\x1b\[94m/g, '<span class="ansi-bright-blue">');
-                    text = text.replace(/\x1b\[95m/g, '<span class="ansi-bright-magenta">');
-                    text = text.replace(/\x1b\[96m/g, '<span class="ansi-bright-cyan">');
-                    text = text.replace(/\x1b\[97m/g, '<span class="ansi-bright-white">');
-                    
-                    // Remove any remaining ANSI codes we haven't processed
-                    text = text.replace(/\x1b\[[0-9;]*m/g, '');
-                    
-                    return text;
-                } catch (error) {
-                    console.error('ANSI processing error:', error);
-                    // Fallback: just escape HTML and return
-                    return text.replace(/&/g, '&amp;')
-                              .replace(/</g, '&lt;')
-                              .replace(/>/g, '&gt;')
-                              .replace(/"/g, '&quot;')
-                              .replace(/'/g, '&#x27;');
-                }
-            }
-            
-            sendInput() {
-                const text = this.input.value;
-                if (text.trim() === '' || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
-                    return;
-                }
-                
-                this.ws.send(JSON.stringify({
-                    type: 'input',
-                    data: text
-                }));
-                
-                // Clear input field
-                this.input.value = '';
-            }
-            
-            sendResize() {
-                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-                    return;
-                }
-                
-                const rows = Math.floor(this.terminal.clientHeight / 20); // Approximate
-                const cols = Math.floor(this.terminal.clientWidth / 8);   // Approximate
-                
-                this.ws.send(JSON.stringify({
-                    type: 'resize',
-                    rows: Math.max(rows, 24),
-                    cols: Math.max(cols, 80)
-                }));
-            }
-            
-            scrollToBottom() {
-                this.terminal.scrollTop = this.terminal.scrollHeight;
             }
             
             updateStatus(className, text) {
                 this.status.className = `status ${className}`;
                 this.status.textContent = text;
             }
-            
+
             scheduleReconnect() {
                 if (this.reconnectAttempts < this.maxReconnectAttempts) {
                     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
                     this.reconnectAttempts++;
+                    this.updateStatus('connecting', `Reconnecting in ${delay/1000}s...`);
                     
-                    this.updateStatus('connecting', `Reconnecting in ${delay/1000}s... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-                    
-                    setTimeout(() => {
-                        this.connect();
-                    }, delay);
+                    setTimeout(() => this.connect(), delay);
                 } else {
-                    this.updateStatus('disconnected', 'Connection failed. Refresh to retry.');
+                    this.updateStatus('disconnected', 'Connection failed. Please reload the page.');
                 }
             }
         }
-        
-        // Initialize the web terminal when the page loads
-        window.addEventListener('DOMContentLoaded', () => {
-            new WebTerminal();
-        });
+
+        window.addEventListener('DOMContentLoaded', () => new WebTerminal());
     </script>
 </body>
 </html>

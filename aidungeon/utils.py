@@ -256,7 +256,7 @@ def input_number(max_choice, default=0):
     val = input_line(f"Enter a number from above (default {default}):", "selection-prompt")
     if not val:
         return default
-    elif not re.match("^\d+$", val) or 0 > int(val) or int(val) > max_choice:
+    elif not re.match(r"^\d+$", val) or 0 > int(val) or int(val) > max_choice:
         output("Invalid choice. ", "error")
         return input_number(max_choice)
     else:
@@ -271,7 +271,7 @@ def bell():
 alphabets= "([A-Za-z])"
 prefixes = "(Mr|St|Mrs|Ms|Dr)[.]"
 suffixes = "(Inc|Ltd|Jr|Sr|Co)"
-starters = "(Mr|Mrs|Ms|Dr|He\s|She\s|It\s|They\s|Their\s|Our\s|We\s|But\s|However\s|That\s|This\s|Wherever)"
+starters = r"(Mr|Mrs|Ms|Dr|He\s|She\s|It\s|They\s|Their\s|Our\s|We\s|But\s|However\s|That\s|This\s|Wherever)"
 acronyms = "([A-Z][.][A-Z][.](?:[A-Z][.])?)"
 websites = "[.](com|ca|gg|tv|co|net|org|io|gov)"
 
@@ -285,7 +285,7 @@ def sentence_split(text):
     text = re.sub(prefixes,"\\1<prd>",text)
     text = re.sub(websites,"<prd>\\1",text)
     if "Ph.D" in text: text = text.replace("Ph.D.","Ph<prd>D<prd>")
-    text = re.sub("\s" + alphabets + "[.] "," \\1<prd> ",text)
+    text = re.sub(r"\s" + alphabets + r"[.] ", r" \1<prd> ", text)
     text = re.sub(acronyms+" "+starters,"\\1<stop> \\2",text)
     text = re.sub(alphabets + "[.]" + alphabets + "[.]" + alphabets + "[.]","\\1<prd>\\2<prd>\\3<prd>",text)
     text = re.sub(alphabets + "[.]" + alphabets + "[.]","\\1<prd>\\2<prd>",text)
@@ -411,11 +411,11 @@ def player_died(text):
     """
     lower_text = text.lower()
     you_dead_regexps = [
-        "you('re| are) (dead|killed|slain|no more|nonexistent)",
-        "you (die|pass away|perish|suffocate|drown|bleed out)",
-        "you('ve| have) (died|perished|suffocated|drowned|been (killed|slain))",
-        "you (\w* )?(yourself )?to death",
-        "you (\w* )*(collapse|bleed out|chok(e|ed|ing)|drown|dissolve) (\w* )*and (die(|d)|pass away|cease to exist|(\w* )+killed)",
+        r"you('re| are) (dead|killed|slain|no more|nonexistent)",
+        r"you (die|pass away|perish|suffocate|drown|bleed out)",
+        r"you('ve| have) (died|perished|suffocated|drowned|been (killed|slain))",
+        r"you (\w* )?(yourself )?to death",
+        r"you (\w* )*(collapse|bleed out|chok(e|ed|ing)|drown|dissolve) (\w* )*and (die(|d)|pass away|cease to exist|(\w* )+killed)",
     ]
     return any(re.search(regexp, lower_text) for regexp in you_dead_regexps)
 
@@ -423,15 +423,14 @@ def player_died(text):
 def player_won(text):
     lower_text = text.lower()
     won_phrases = [
-        "you ((\w* )*and |)live happily ever after",
-        "you ((\w* )*and |)live (forever|eternally|for eternity)",
-        "you ((\w* )*and |)(are|become|turn into) ((a|now) )?(deity|god|immortal)",
-        "you ((\w* )*and |)((go|get) (in)?to|arrive (at|in)) (heaven|paradise)",
-        "you ((\w* )*and |)celebrate your (victory|triumph)",
-        "you ((\w* )*and |)retire",
+        r"you ((\w* )*and |)live happily ever after",
+        r"you ((\w* )*and |)live (forever|eternally|for eternity)",
+        r"you ((\w* )*and |)(are|become|turn into) ((a|now) )?(deity|god|immortal)",
+        r"you ((\w* )*and |)((go|get) (in)?to|arrive (at|in)) (heaven|paradise)",
+        r"you ((\w* )*and |)celebrate your (victory|triumph)",
+        r"you ((\w* )*and |)retire",
     ]
     return any(re.search(regexp, lower_text) for regexp in won_phrases)
-
 
 def cut_trailing_quotes(text):
     num_quotes = text.count('"')
@@ -574,13 +573,13 @@ def mapping_variation_pairs(mapping):
         (" " + capitalize(mapping[0]) + " ", " " + capitalize(mapping[1]) + " ")
     )
 
-    # Change you it's before a punctuation
+    # Change "you" to "me" if it's before a punctuation
     if mapping[0] == "you":
         mapping = ("you", "me")
     mapping_list.append((" " + mapping[0] + ",", " " + mapping[1] + ","))
-    mapping_list.append((" " + mapping[0] + "\?", " " + mapping[1] + "\?"))
-    mapping_list.append((" " + mapping[0] + "\!", " " + mapping[1] + "\!"))
-    mapping_list.append((" " + mapping[0] + "\.", " " + mapping[1] + "."))
+    mapping_list.append((" " + mapping[0] + "\\?", " " + mapping[1] + "\\?"))
+    mapping_list.append((" " + mapping[0] + "\\!", " " + mapping[1] + "\\!"))
+    mapping_list.append((" " + mapping[0] + "\\.", " " + mapping[1] + "."))
 
     return mapping_list
 
