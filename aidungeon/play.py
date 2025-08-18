@@ -162,6 +162,107 @@ INVENTORY_SUGGESTIONS = {
 }
 
 
+def roll_dice(dice_notation):
+    """
+    Parse dice notation and return results.
+    Supports formats like: 1d20, 3d6, 2d10+5, 1d6-1, d20 (assumes 1d20)
+    
+    Returns a dictionary with:
+    - 'total': final sum
+    - 'rolls': list of individual dice results
+    - 'modifier': any bonus/penalty applied
+    - 'notation': the original notation
+    """
+    # Clean the input
+    dice_notation = dice_notation.strip().lower().replace(" ", "")
+    
+    # Handle shorthand notation (d20 -> 1d20)
+    if dice_notation.startswith('d'):
+        dice_notation = '1' + dice_notation
+    
+    # Parse the dice notation with regex
+    pattern = r'^(\d+)d(\d+)([+-]\d+)?$'
+    match = re.match(pattern, dice_notation)
+    
+    if not match:
+        return {
+            'error': f"Invalid dice notation: {dice_notation}",
+            'notation': dice_notation,
+            'total': 0,
+            'rolls': [],
+            'modifier': 0
+        }
+    
+    num_dice = int(match.group(1))
+    die_size = int(match.group(2))
+    modifier = int(match.group(3)) if match.group(3) else 0
+    
+    # Sanity checks
+    if num_dice > 100:
+        return {
+            'error': "Too many dice! Maximum is 100.",
+            'notation': dice_notation,
+            'total': 0,
+            'rolls': [],
+            'modifier': modifier
+        }
+    
+    if die_size < 2 or die_size > 1000:
+        return {
+            'error': "Invalid die size! Must be between 2 and 1000.",
+            'notation': dice_notation,
+            'total': 0,
+            'rolls': [],
+            'modifier': modifier
+        }
+    
+    # Roll the dice!
+    rolls = [random.randint(1, die_size) for _ in range(num_dice)]
+    total = sum(rolls) + modifier
+    
+    return {
+        'notation': dice_notation,
+        'total': total,
+        'rolls': rolls,
+        'modifier': modifier,
+        'num_dice': num_dice,
+        'die_size': die_size
+    }
+
+def format_dice_result(result):
+    """Format dice roll results for display."""
+    if 'error' in result:
+        return f"❌ {result['error']}"
+    
+    notation = result['notation'].upper()
+    rolls = result['rolls']
+    modifier = result['modifier']
+    total = result['total']
+    
+    # Format individual rolls
+    if len(rolls) == 1:
+        roll_text = str(rolls[0])
+    else:
+        roll_text = f"[{', '.join(map(str, rolls))}]"
+    
+    # Add modifier text
+    modifier_text = ""
+    if modifier > 0:
+        modifier_text = f" + {modifier}"
+    elif modifier < 0:
+        modifier_text = f" - {abs(modifier)}"
+    
+    # Special cases for critical hits/fails on d20
+    critical_text = ""
+    if result['die_size'] == 20 and len(rolls) == 1:
+        if rolls[0] == 20:
+            critical_text = " 🎯 CRITICAL!"
+        elif rolls[0] == 1:
+            critical_text = " 💥 FUMBLE!"
+    
+    return f"🎲 {notation}: {roll_text}{modifier_text} = **{total}**{critical_text}"
+
+
 def generate_random_prompt(generator):
     """Uses the AI to generate a random story prompt."""
     output("\nGenerating a random story from the AI...", "loading-message")
@@ -482,6 +583,23 @@ class GameManager:
     def __init__(self, gen: OllamaGenerator):
         self.generator = gen
         self.story, self.context, self.prompt = None, None, None
+        self.skip_suggestion_regeneration = False
+        self.hide_suggestions_for_next_prompt = False
+        self.last_suggestions = []
+
+# In aidungeon/play.py, inside the GameManager class
+
+    def _display_prompt_and_get_action(self, suggestions):
+        """Displays suggestions and the input prompt, then returns the user's action."""
+        # Use the 'suggestions' argument passed to the function
+        if suggestions and not self.hide_suggestions_for_next_prompt:
+            suggestions_text = "".join([f"\n{i}) {s}" for i, s in enumerate(suggestions)])
+            output("Suggested actions: \n" + suggestions_text, "selection-value")
+        
+        bell()
+        
+        return input_line("\n> ", "main-prompt", default="You ")
+    
 
     def get_state_based_suggestions(self):
         """Parse the last result for keywords and return relevant actions."""
@@ -616,6 +734,10 @@ class GameManager:
             settings_menu()
             self.story.print_last()
 
+        elif command == "generate":
+            self.process_action("", [])
+            return False
+
         elif command == "menu":
             if input_bool("Do you want to save? (y/N): ", "query"):
                 save_story(self.story)
@@ -628,13 +750,58 @@ class GameManager:
                 return False
             self.story = new_story(self.generator, self.story.context, self.prompt)
 
-        elif command == "quit":
+        # Add /roll command for D&D-style gameplay
+        elif command == "roll":
+            if not args:
+                # Default to d20 if no dice specified
+                dice_notation = "1d20"
+            else:
+                dice_notation = args[0]
+            
+            self.skip_suggestion_regeneration = True
+            self.hide_suggestions_for_next_prompt = True
+            result = roll_dice(dice_notation)
+            formatted_result = format_dice_result(result)
+            output(formatted_result, "message")
+            
+            # Optional: Add the roll result to the story context for dramatic effect
+            if 'error' not in result and settings.getboolean("dice-in-story", fallback=False):
+                roll_action = f"You roll {result['notation'].upper()} and get {result['total']}"
+                self.story.act(roll_action, record=True)
+
+        elif command in ["d4", "d6", "d8", "d10", "d12", "d20", "d100"]:
+            die_size = command[1:]  # Remove the 'd'
+            result = roll_dice(f"1d{die_size}")
+            formatted_result = format_dice_result(result)
+            output(formatted_result, "message")
+            self.skip_suggestion_regeneration = True
+            self.hide_suggestions_for_next_prompt = True
+
+        elif command in ["look", "recall"]:
+            self.story.print_last()
+            if self.last_suggestions:
+                # Use the same formatting as _display_prompt_and_get_action
+                suggestions_text = "".join([f"\n{i}) {s}" for i, s in enumerate(self.last_suggestions)])
+                output("Suggested actions:\n" + suggestions_text, "selection-value")
+            else:
+                output("No suggestions to display.", "message")
+            self.skip_suggestion_regeneration = True
+            self.hide_suggestions_for_next_prompt = True
+
+        elif command in ["quit", "exit"]:
             if input_bool("Do you want to save? (y/N): ", "query"):
                 save_story(self.story)
             exit()
 
         elif command == "help":
             instructions()
+            self.skip_suggestion_regeneration = True
+
+        elif command in ["sheet", "char", "inventory"]:
+            self.story.character.display()
+            #self.story.print_last()
+            self.skip_suggestion_regeneration = True
+            self.hide_suggestions_for_next_prompt = True
 
         elif command == "print":
             use_wrap = input_bool("Print with wrapping? (y/N): ", "query")
@@ -669,9 +836,6 @@ class GameManager:
             self.story.revert()
             output("Last action reverted. ", "message")
             self.story.print_last()
-        
-        elif command in ["sheet", "char", "inventory"]:
-            self.story.character.display()
 
         elif command == "drop":
             item_to_drop = " ".join(args)
@@ -868,71 +1032,67 @@ class GameManager:
         # Output the AI's result.
         output(result, "ai-text")
 
+
     def play_story(self):
         """The main in-game loop."""
         if not self.init_story():
             return
 
         while True:
-            suggested_actions = []
-            total_suggestions_wanted = settings.getint("action-sugg")
-            
-            if total_suggestions_wanted > 0:
-                # --- New Keyword-Priority Suggestion Logic ---
-                num_keyword_suggestions = settings.getint("keyword-sugg")
+            # Generate suggestions if not skipped
 
-                # 1. Start with a single, random, high-priority inventory suggestion if available.
-                inventory_suggestions = self.get_state_based_suggestions()
-                if inventory_suggestions:
-                    suggested_actions.append(random.choice(inventory_suggestions))
+            suggested_actions = []
+
+            if not self.skip_suggestion_regeneration:
+                total_suggestions_wanted = settings.getint("action-sugg")
                 
-                # 2. Add keyword-based suggestions up to the specified limit.
-                if len(suggested_actions) < num_keyword_suggestions:
-                    last_result = self.story.results[-1].lower() if self.story.results else ""
-                    present_keywords = [k for k in KEYWORD_ACTIONS if k in last_result]
+                if total_suggestions_wanted > 0:
+                    # (This is the existing suggestion generation logic)
+                    num_keyword_suggestions = settings.getint("keyword-sugg")
+                    inventory_suggestions = self.get_state_based_suggestions()
+                    if inventory_suggestions:
+                        suggested_actions.append(random.choice(inventory_suggestions))
                     
-                    # Shuffle to ensure variety
-                    random.shuffle(present_keywords) 
-                    
-                    for keyword in present_keywords:
-                        keyword_actions = KEYWORD_ACTIONS[keyword][:] # Make a copy
-                        random.shuffle(keyword_actions)
-                        for action in keyword_actions:
-                            if action not in suggested_actions:
-                                suggested_actions.append(action)
+                    if len(suggested_actions) < num_keyword_suggestions:
+                        last_result = self.story.results[-1].lower() if self.story.results else ""
+                        present_keywords = [k for k in KEYWORD_ACTIONS if k in last_result]
+                        random.shuffle(present_keywords)
+                        
+                        for keyword in present_keywords:
+                            keyword_actions = KEYWORD_ACTIONS[keyword][:]
+                            random.shuffle(keyword_actions)
+                            for action in keyword_actions:
+                                if action not in suggested_actions:
+                                    suggested_actions.append(action)
+                                if len(suggested_actions) >= num_keyword_suggestions:
+                                    break
                             if len(suggested_actions) >= num_keyword_suggestions:
                                 break
-                        if len(suggested_actions) >= num_keyword_suggestions:
-                            break
-                
-                # 3. Use the LLM to generate the rest of the suggestions to meet the total quota.
-                num_ai_suggestions = total_suggestions_wanted - len(suggested_actions)
-                if num_ai_suggestions > 0:
-                    for _ in range(num_ai_suggestions):
-                        new_suggestion = self.story.get_suggestion(previous_suggestions=suggested_actions)
-                        if new_suggestion and new_suggestion not in suggested_actions:
-                            suggested_actions.append(new_suggestion)
+                    
+                    num_ai_suggestions = total_suggestions_wanted - len(suggested_actions)
+                    if num_ai_suggestions > 0:
+                        for _ in range(num_ai_suggestions):
+                            new_suggestion = self.story.get_suggestion(previous_suggestions=suggested_actions)
+                            if new_suggestion and new_suggestion not in suggested_actions:
+                                suggested_actions.append(new_suggestion)
 
-                # 4. Ensure the final list is unique and has the correct length.
-                suggested_actions = list(dict.fromkeys(suggested_actions))[:total_suggestions_wanted]
+                    self.last_suggestions = list(dict.fromkeys(suggested_actions))[:total_suggestions_wanted]
 
-                if suggested_actions:
-                    output("Suggested actions:", "selection-value")
-                    for i, suggestion in enumerate(suggested_actions):
-                        output(f"{i}) {suggestion}", "selection-value")
-            
-            bell()
-            
-            action = input_line("\n> ", "main-prompt", default="You ")
+            # Reset the flag after checking it
+            self.skip_suggestion_regeneration = False
 
+            # Get user input
+            action = self._display_prompt_and_get_action(suggested_actions)
+
+            # Process user input
             cmd_regex = re.search(r"^(?: *you *)?\/([^ ]+) *(.*)$", action, flags=re.I)
 
             if cmd_regex:
                 if self.process_command(cmd_regex):
-                    return
+                    return  # Exit game loop if command returns True
             else:
-                if self.process_action(action, suggested_actions):
-                    return
+                if self.process_action(action, self.last_suggestions):
+                    return  # Exit game loop if action returns True
 
             if settings.getboolean("autosave"):
                 save_story(self.story, file_override=self.story.savefile, autosave=True)
