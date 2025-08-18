@@ -66,7 +66,7 @@ def get_ollama_model():
 
 def get_ollama_timeout():
     """Get Ollama timeout from environment, falling back to settings."""
-    default_timeout = settings.getint("ollama-timeout", 120)
+    default_timeout = settings.getint("ollama-timeout", 180)
     return int(os.environ.get("OLLAMA_TIMEOUT", default_timeout))
 
 def get_action_suggestions():

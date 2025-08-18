@@ -145,29 +145,20 @@ class Story:
         self.results = self.results[:-1]
 
     def get_suggestion(self, previous_suggestions=None):
-        """Generate a suggested action, providing examples and avoiding similarity to previous suggestions."""
-        if previous_suggestions is None:
-            previous_suggestions = []
-
-        story_text = self.get_story()
-        
-        examples = (
-            "Here are some examples of good actions:\n"
-            "- You go north.\n"
-            "- You pick up the sword.\n"
-            "- You talk to the bartender.\n"
-            "- You examine your surroundings."
-        )
-
-        instruction = "What do you do next? Please provide a short, single-action command for the player."
+        """Generate a creative, context-aware action."""
+        story_so_far = self.get_story()
         
         exclusion_prompt = ""
         if previous_suggestions:
-            exclusion_header = "\n\nAvoid generating actions similar to these:"
-            exclusions = "\n".join([f"- You {s}" for s in previous_suggestions])
-            exclusion_prompt = f"{exclusion_header}\n{exclusions}"
+            exclusions = "\n".join(f"- {s}" for s in previous_suggestions)
+            exclusion_prompt = f"\n\nTo ensure variety, do not suggest any of the following actions:\n{exclusions}"
 
-        suggestion_prompt = f"{story_text}\n\n{instruction}\n\n{examples}{exclusion_prompt}\n\n> You"
+        # MODIFIED: A much more direct and powerful prompt.
+        suggestion_prompt = (
+            f"Here is the current scene from a text adventure game:\n\n{story_so_far}\n\n"
+            f"Based on this scene, provide a single, logical, and creative action the player could take. It shouldn't be longer than 5 or 6 words. Don't output comments or anything else other than the requested action. "
+            f"The action should make sense for the setting (e.g., in a tavern, you might 'talk to the bartender'; in a dungeon, you might 'check for traps').{exclusion_prompt}"
+        )
         
         suggestion = self.generator.generate_raw(
             suggestion_prompt,
@@ -180,11 +171,9 @@ class Story:
             stop_tokens=["\n", "."]
         )
         
-        suggestion = suggestion.strip()
-        suggestion = re.sub(r'^(?:You\s+)?', '', suggestion, flags=re.I).strip()
-        suggestion = re.sub(r'^\s*[-*1-9]\.?\s*', '', suggestion)
+        suggestion = suggestion.strip().replace("You ", "", 1).lstrip(" >!.?")
+        return suggestion if suggestion else None
 
-        return suggestion
 
     def __str__(self):
         return self.context + ' ' + self.get_story()
