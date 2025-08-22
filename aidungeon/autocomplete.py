@@ -106,34 +106,42 @@ class GameCompleter(Completer):
 
         # Action verb completion
         else:
-            # Complete action verbs at the start of input (after "you")
-            clean_text = re.sub(r'^(you\s+)?', '', text.lower().strip())
-            
-            for verb in self.action_verbs:
-                if verb.startswith(clean_text) or verb.startswith(word_before_cursor.lower()):
-                    completion_text = verb
-                    if not text.lower().startswith('you'):
-                        completion_text = f"You {verb}"
-                    
-                    yield Completion(
-                        completion_text[len(text):] if text.lower().startswith('you') else completion_text,
-                        display=f"▶ {completion_text}",
-                        style='class:autocomplete'
-                    )
-            
-            # Complete with contextual keywords
-            try:
-                keywords = self.get_keywords()
-                for keyword in keywords:
-                    if keyword.lower().startswith(word_before_cursor.lower()) and len(word_before_cursor) >= 2:
+            # Get the word we're trying to complete
+            if word_before_cursor:
+                # Complete individual words within the input
+                for verb in self.action_verbs:
+                    if verb.lower().startswith(word_before_cursor.lower()):
+                        # Replace the partial word with the complete verb
                         yield Completion(
-                            keyword[len(word_before_cursor):],
-                            display=f"🔸 {keyword}",
+                            verb[len(word_before_cursor):],
+                            display=f"▶ You {verb}",
                             style='class:autocomplete'
                         )
-            except Exception:
-                # If keyword generation fails, just continue without contextual suggestions
-                pass
+                        
+                # Complete with contextual keywords
+                try:
+                    keywords = self.get_keywords()
+                    for keyword in keywords:
+                        if (keyword.lower().startswith(word_before_cursor.lower()) and 
+                            len(word_before_cursor) >= 2 and
+                            keyword.lower() not in [v.lower() for v in self.action_verbs]):  # Avoid duplicates
+                            yield Completion(
+                                keyword[len(word_before_cursor):],
+                                display=f"🔸 {keyword}",
+                                style='class:autocomplete'
+                            )
+                except Exception:
+                    # If keyword generation fails, just continue without contextual suggestions
+                    pass
+            else:
+                # If no partial word, suggest starting with "You " followed by verbs
+                for verb in self.action_verbs[:10]:  # Limit to first 10 to avoid overwhelming
+                    if not text.lower().startswith('you'):
+                        yield Completion(
+                            f"You {verb}",
+                            display=f"▶ You {verb}",
+                            style='class:autocomplete'
+                        )
 
 
 # Enhanced input function with autocomplete support
@@ -157,10 +165,13 @@ def input_line_with_autocomplete(prompt_text, col1="default", default="", comple
                 """Handle Enter key - complete if menu is showing, otherwise accept input."""
                 buffer = event.app.current_buffer
                 
-                # If there's a completion menu visible and something is selected
-                if buffer.complete_state and buffer.complete_state.completions:
-                    # Apply the current completion
+                # If there's a completion menu visible with completions
+                if (buffer.complete_state and 
+                    buffer.complete_state.completions and 
+                    buffer.complete_state.current_completion is not None):
+                    # Apply the current completion and close the menu
                     buffer.apply_completion(buffer.complete_state.current_completion)
+                    buffer.cancel_completion()
                 else:
                     # No completion menu or nothing selected, accept the line
                     buffer.validate_and_handle()
@@ -171,8 +182,16 @@ def input_line_with_autocomplete(prompt_text, col1="default", default="", comple
                 buffer = event.app.current_buffer
                 if buffer.complete_state:
                     buffer.complete_next()
+                    # Auto-apply the completion as we cycle
+                    if buffer.complete_state.current_completion is not None:
+                        buffer.apply_completion(buffer.complete_state.current_completion)
                 else:
                     buffer.start_completion()
+                    # Auto-apply the first completion if available
+                    if (buffer.complete_state and 
+                        buffer.complete_state.completions and 
+                        buffer.complete_state.current_completion is not None):
+                        buffer.apply_completion(buffer.complete_state.current_completion)
             
             @kb.add('s-tab')  # Shift+Tab
             def _(event):
@@ -180,7 +199,17 @@ def input_line_with_autocomplete(prompt_text, col1="default", default="", comple
                 buffer = event.app.current_buffer
                 if buffer.complete_state:
                     buffer.complete_previous()
+                    # Auto-apply the completion as we cycle
+                    if buffer.complete_state.current_completion is not None:
+                        buffer.apply_completion(buffer.complete_state.current_completion)
             
+            @kb.add('escape')
+            def _(event):
+                """Handle Escape key - close completion menu."""
+                buffer = event.app.current_buffer
+                if buffer.complete_state:
+                    buffer.cancel_completion()
+                    
             style = Style.from_dict({
                 'completion-menu.completion': 'bg:#87ceeb fg:black',
                 'completion-menu.completion.current': 'bg:#005f87 fg:white bold',
