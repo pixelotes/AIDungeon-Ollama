@@ -3,54 +3,17 @@
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 import re
-from .keywords import KEYWORD_ACTIONS, INVENTORY_SUGGESTIONS
+from .dictionary import KEYWORD_ACTIONS, INVENTORY_SUGGESTIONS
+from .dictionary import palette_commands, palette_action_verbs, palette_dice_shortcuts
 
 class GameCompleter(Completer):
     """Custom completer for the AI Dungeon game."""
     
     def __init__(self, story=None):
         self.story = story
-        self.commands = [
-            '/revert', '/quit', '/menu', '/retry', '/restart', '/print', '/sheet',
-            '/look', '/drop', '/alter', '/altergen', '/context', '/remember',
-            '/memalt', '/memswap', '/roll', '/forget', '/save', '/load',
-            '/summarize', '/generate', '/help', '/set', '/settings',
-            # Add dice shortcuts as commands too
-            '/d4', '/d6', '/d8', '/d10', '/d12', '/d20', '/d100'
-        ]
-        
-        self.action_verbs = [
-            'go', 'walk', 'run', 'move', 'travel', 'head', 'venture',
-            'take', 'get', 'grab', 'pick up', 'collect', 'gather',
-            'drop', 'put down', 'place', 'set down', 'leave',
-            'open', 'close', 'shut', 'unlock', 'lock',
-            'use', 'utilize', 'employ', 'operate', 'activate',
-            'examine', 'look at', 'inspect', 'study', 'observe', 'check',
-            'search', 'look for', 'find', 'seek', 'hunt for',
-            'attack', 'fight', 'strike', 'hit', 'punch', 'kick',
-            'defend', 'block', 'parry', 'dodge', 'evade',
-            'speak to', 'talk to', 'say', 'whisper', 'shout', 'call',
-            'climb', 'jump', 'leap', 'hop', 'vault',
-            'hide', 'sneak', 'creep', 'skulk', 'prowl',
-            'push', 'pull', 'drag', 'lift', 'carry',
-            'break', 'smash', 'destroy', 'shatter', 'crush',
-            'fix', 'repair', 'mend', 'restore', 'rebuild',
-            'read', 'write', 'draw', 'sketch', 'note',
-            'listen', 'hear', 'eavesdrop',
-            'smell', 'sniff', 'taste',
-            'wait', 'rest', 'sleep', 'sit', 'stand',
-            'throw', 'toss', 'hurl', 'cast', 'fling',
-            'buy', 'sell', 'trade', 'purchase', 'barter',
-            'give', 'hand over', 'offer', 'present',
-            'follow', 'chase', 'pursue', 'track',
-            'escape', 'flee', 'run away', 'retreat'
-        ]
-        
-        self.dice_shortcuts = [
-            'd4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100',
-            '1d4', '1d6', '1d8', '1d10', '1d12', '1d20', '1d100',
-            '2d6', '3d6', '4d6', '2d8', '3d8', '2d10', '2d12'
-        ]
+        self.commands = palette_commands   
+        self.action_verbs = palette_action_verbs      
+        self.dice_shortcuts = palette_dice_shortcuts
 
     def get_keywords(self):
         """Get contextual keywords based on the current story state."""
