@@ -178,30 +178,47 @@ def input_line_with_autocomplete(prompt_text, col1="default", default="", comple
             
             @kb.add('tab')
             def _(event):
-                """Handle Tab key - show completions or cycle through them."""
+                """Handle Tab key - apply current completion or start completion."""
+                buffer = event.app.current_buffer
+                if buffer.complete_state and buffer.complete_state.current_completion is not None:
+                    # Apply the currently highlighted completion and close menu
+                    buffer.apply_completion(buffer.complete_state.current_completion)
+                    buffer.cancel_completion()
+                else:
+                    # Start completion if none active
+                    buffer.start_completion()
+            
+            @kb.add('c-n')  # Ctrl+N - next completion
+            def _(event):
+                """Handle Ctrl+N - cycle to next completion."""
                 buffer = event.app.current_buffer
                 if buffer.complete_state:
                     buffer.complete_next()
-                    # Auto-apply the completion as we cycle
-                    if buffer.complete_state.current_completion is not None:
-                        buffer.apply_completion(buffer.complete_state.current_completion)
                 else:
                     buffer.start_completion()
-                    # Auto-apply the first completion if available
-                    if (buffer.complete_state and 
-                        buffer.complete_state.completions and 
-                        buffer.complete_state.current_completion is not None):
-                        buffer.apply_completion(buffer.complete_state.current_completion)
             
-            @kb.add('s-tab')  # Shift+Tab
+            @kb.add('c-p')  # Ctrl+P - previous completion  
             def _(event):
-                """Handle Shift+Tab - cycle backwards through completions."""
+                """Handle Ctrl+P - cycle to previous completion."""
                 buffer = event.app.current_buffer
                 if buffer.complete_state:
                     buffer.complete_previous()
-                    # Auto-apply the completion as we cycle
-                    if buffer.complete_state.current_completion is not None:
-                        buffer.apply_completion(buffer.complete_state.current_completion)
+                else:
+                    buffer.start_completion()
+                    
+            @kb.add('down')  # Down arrow - next completion
+            def _(event):
+                """Handle Down arrow - cycle to next completion."""
+                buffer = event.app.current_buffer
+                if buffer.complete_state:
+                    buffer.complete_next()
+                    
+            @kb.add('up')  # Up arrow - previous completion
+            def _(event):
+                """Handle Up arrow - cycle to previous completion."""
+                buffer = event.app.current_buffer
+                if buffer.complete_state:
+                    buffer.complete_previous()
             
             @kb.add('escape')
             def _(event):
