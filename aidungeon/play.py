@@ -9,9 +9,10 @@ from .storymanager import Story
 from .utils import *
 from .ollamagenerator import OllamaGenerator, get_generator
 from .interface import instructions
-from .keywords import KEYWORD_ACTIONS, INVENTORY_SUGGESTIONS
+from .dictionary import KEYWORD_ACTIONS, INVENTORY_SUGGESTIONS
 from .autocomplete import GameCompleter, input_line_with_autocomplete
-
+from .prompts import GENERATE_STORY_PROMPT
+from .dictionary import adjective_action_d01, adjective_action_d20, adjectives_say_d01, adjectives_say_d20, random_themes
 
 def roll_dice(dice_notation):
     """
@@ -117,21 +118,10 @@ def format_dice_result(result):
 def generate_random_prompt(generator):
     """Uses the AI to generate a random story prompt."""
     output("\nGenerating a random story from the AI...", "loading-message")
-    themes = ["Sci-Fi", "Fantasy", "Horror", "Post-Apocalyptic", "Spy Thriller", "Victorian Mystery", "Pulp Adventure", "Cyberpunk", "Isekai"]
-    chosen_theme = random.choice(themes)
-
-    prompt_for_ai = (
-        f"You are a creative assistant. Generate a random story prompt for a text-based adventure game with a '{chosen_theme}' theme.\n"
-        "The prompt must consist of two paragraphs separated by '|||'. Keep the total response under 150 words.\n"
-        "The first paragraph is the context that introduces a character and setting.\n"
-        "The second paragraph is the first action the character takes, and it should end with a comma or without final punctuation.\n"
-        "Do not include any other text, comments, or confirmation; only provide the two-paragraph output.\n\n"
-        "EXAMPLE:\n"
-        "I am a cyber-scavenger in the neon-drenched ruins of Neo-City, hunted by corporate enforcers after a data heist went wrong. My only chance is to find the rogue AI known as 'Echo' in the underbelly of the city.|||I pull my cloak tighter to hide from the perpetual acid rain and slip into the shadows of a crowded alley,"
-    )
+    chosen_theme = random.choice(random_themes)
 
     full_prompt_text = generator.generate_raw(
-        prompt_for_ai,
+        f"You are a creative assistant. Generate a random story prompt for a text-based adventure game with a '{chosen_theme}' theme.\n" + GENERATE_STORY_PROMPT,
         temperature=1.0,
         generate_num=500,  # Increased token limit
     )
@@ -170,23 +160,6 @@ def generate_random_prompt(generator):
 
 def d20ify_speech(action, d):
     """Add D20 flavor to speech actions."""
-    adjectives_say_d01 = [
-        "mumble",
-        "prattle",
-        "incoherently say",
-        "whine",
-        "ramble",
-        "wheeze",
-    ]
-    adjectives_say_d20 = [
-        "successfully",
-        "persuasively",
-        "expertly",
-        "conclusively",
-        "dramatically",
-        "adroitly",
-        "aptly",
-    ]
     if d == 1:
         adjective = random.sample(adjectives_say_d01, 1)[0]
         action = "You " + adjective + " " + action
@@ -200,23 +173,6 @@ def d20ify_speech(action, d):
 
 def d20ify_action(action, d):
     """Add D20 flavor to regular actions."""
-    adjective_action_d01 = [
-        "disastrously",
-        "incompetently",
-        "dangerously",
-        "stupidly",
-        "horribly",
-        "miserably",
-        "sadly",
-    ]
-    adjective_action_d20 = [
-        "successfully",
-        "expertly",
-        "conclusively",
-        "adroitly",
-        "aptly",
-        "masterfully",
-    ]
     if d == 1:
         adjective = random.sample(adjective_action_d01, 1)[0]
         action = "You " + adjective + " fail to " + action
