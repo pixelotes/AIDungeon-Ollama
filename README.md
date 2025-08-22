@@ -3,7 +3,7 @@
 
 A fork of AIDungeon2 with numerous improvements. Now powered by Ollama, allowing for use with a wide variety of open-source models.
 
-![img](images/retro2.jpg)
+![img](images/web_terminal.jpg)
 
 Also take a look at [AIDungeonPastes](https://aidungeonpastes.github.io/AID2-Art/) for some drawn gameplay examples.
 

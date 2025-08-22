@@ -17,6 +17,7 @@ def instructions():
     print('  "/retry"                 Retries the last action')
     print('  "/restart"               Restarts the current story')
     print('  "/print"                 Prints a transcript of your adventure (without extra newline formatting)')
+    print('  "/suggest"               Generates a new set of suggestions.')
     print('  "/sheet"                 Displays your character sheet and inventory.')
     print('  "/look"                  Prints the last story section and the suggestions, if generated.')
     print('  "/drop [ITEM]"           Drops an item from your inventory.')

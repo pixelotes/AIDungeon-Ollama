@@ -3,6 +3,7 @@ import re
 from .getconfig import settings, logger
 from .utils import output, format_result, format_input, get_similarity
 from .charactersheet import CharacterSheet
+from .prompts import GENERATE_PASSAGE_PROMPT, GENERATE_SUGGESTION_PROMPT, SUMMARIZATION_PROMPT
 
 
 class Story:
@@ -41,8 +42,7 @@ class Story:
         chunk_results = self.results[:self.STORY_CHUNK_SIZE]
         story_chunk_text = "\n\n".join([val for pair in zip(chunk_actions, chunk_results) for val in pair])
         prompt = (
-            "Concisely summarize the key events, characters, and outcomes from the "
-            f"following story passage in one or two sentences:\n\n---\n\n{story_chunk_text}"
+            SUMMARIZATION_PROMPT + "{story_chunk_text}"
         )
         summary = self.generator.generate_raw(
             prompt,
@@ -70,12 +70,7 @@ class Story:
         base_context = f"{self.context} {memory_context}".strip()
 
         # Add a system prompt to guide the AI's behavior for story generation
-        instructions = (
-            "You are a master storyteller acting as a text adventure game engine. "
-            "Continue the narrative based on the user's action. "
-            "Do not break character. Do not add any meta-commentary, conversational filler, or out-of-game remarks like 'Okay, let's continue'. "
-            "Directly describe the outcome of the action and the current state of the world to move the story forward."
-        )
+        instructions = GENERATE_PASSAGE_PROMPT
         full_context = f"[System Prompt: {instructions}]\n\n{base_context}"
         
         result = self.generator.generate(
@@ -155,9 +150,7 @@ class Story:
 
         # MODIFIED: A much more direct and powerful prompt.
         suggestion_prompt = (
-            f"Here is the current scene from a text adventure game:\n\n{story_so_far}\n\n"
-            f"Based on this scene, provide a single, logical, and creative action the player could take. It shouldn't be longer than 5 or 6 words. Don't output comments or anything else other than the requested action. "
-            f"The action should make sense for the setting (e.g., in a tavern, you might 'talk to the bartender'; in a dungeon, you might 'check for traps').{exclusion_prompt}"
+            f"Here is the current scene from a text adventure game:\n\n{story_so_far}\n\n" + GENERATE_SUGGESTION_PROMPT + "{exclusion_prompt}"
         )
         
         suggestion = self.generator.generate_raw(

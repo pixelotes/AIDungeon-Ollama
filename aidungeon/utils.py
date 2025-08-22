@@ -7,8 +7,9 @@ import os
 import sys
 
 from .getconfig import logger, settings, colors, ptcolors
-from shutil import get_terminal_size
-
+from shutil import get_terminal_size 
+from .dictionary import acronyms, alphabets, prefixes, starters, suffixes, websites, won_phrases, you_dead_regexps, first_to_second_mappings, second_to_first_mappings
+from .dictionary import KEYWORD_ACTIONS, INVENTORY_SUGGESTIONS, palette_action_verbs, palette_important_nouns
 
 def getTermWidth():
     termWidth = get_terminal_size()[0]
@@ -235,6 +236,36 @@ def input_bool(prompt, col1="default", default: bool = False):
         return default
     return val[0] == "y"
 
+def input_line_with_autocomplete(prompt_text, col1="default", default="", completer=None):
+    """Enhanced input_line with autocomplete support."""
+    if use_ptoolkit() and ptcolors['displaymethod'] == "prompt-toolkit":
+        from prompt_toolkit.shortcuts import CompleteStyle
+        from prompt_toolkit.styles import Style
+        
+        style = Style.from_dict({
+            'completion-menu.completion': 'bg:#87ceeb fg:black',
+            'completion-menu.completion.current': 'bg:#005f87 fg:white bold',
+            'scrollbar.background': 'bg:#88aaaa',
+            'scrollbar.button': 'bg:#222222',
+            'autocomplete': 'fg:#888888',  # Style for autocomplete suggestions
+        })
+        
+        col1_style = ptcolors[col1] if col1 and ptcolors[col1] else ""
+        
+        val = ptprompt(
+            to_formatted_text(prompt_text, col1_style),
+            default=default,
+            completer=completer,
+            complete_style=CompleteStyle.MULTI_COLUMN,
+            style=style,
+            complete_while_typing=True
+        )
+    else:
+        # Fallback to original input_line for non-prompt_toolkit
+        val = input_line(prompt_text, col1, default)
+    
+    return val
+
 def input_line(str, col1="default", default=""):
     if use_ptoolkit() and ptcolors['displaymethod'] == "prompt-toolkit":
         col1 = ptcolors[col1] if col1 and ptcolors[col1] else ""
@@ -266,14 +297,6 @@ def input_number(max_choice, default=0):
 def bell():
     if settings.getboolean("console-bell"):
         print("\x07", end="")
-
-
-alphabets= "([A-Za-z])"
-prefixes = "(Mr|St|Mrs|Ms|Dr)[.]"
-suffixes = "(Inc|Ltd|Jr|Sr|Co)"
-starters = r"(Mr|Mrs|Ms|Dr|He\s|She\s|It\s|They\s|Their\s|Our\s|We\s|But\s|However\s|That\s|This\s|Wherever)"
-acronyms = "([A-Z][.][A-Z][.](?:[A-Z][.])?)"
-websites = "[.](com|ca|gg|tv|co|net|org|io|gov)"
 
 
 def sentence_split(text):
@@ -410,26 +433,11 @@ def player_died(text):
     statements as resulting in death or not.
     """
     lower_text = text.lower()
-    you_dead_regexps = [
-        r"you('re| are) (dead|killed|slain|no more|nonexistent)",
-        r"you (die|pass away|perish|suffocate|drown|bleed out)",
-        r"you('ve| have) (died|perished|suffocated|drowned|been (killed|slain))",
-        r"you (\w* )?(yourself )?to death",
-        r"you (\w* )*(collapse|bleed out|chok(e|ed|ing)|drown|dissolve) (\w* )*and (die(|d)|pass away|cease to exist|(\w* )+killed)",
-    ]
     return any(re.search(regexp, lower_text) for regexp in you_dead_regexps)
 
 
 def player_won(text):
     lower_text = text.lower()
-    won_phrases = [
-        r"you ((\w* )*and |)live happily ever after",
-        r"you ((\w* )*and |)live (forever|eternally|for eternity)",
-        r"you ((\w* )*and |)(are|become|turn into) ((a|now) )?(deity|god|immortal)",
-        r"you ((\w* )*and |)((go|get) (in)?to|arrive (at|in)) (heaven|paradise)",
-        r"you ((\w* )*and |)celebrate your (victory|triumph)",
-        r"you ((\w* )*and |)retire",
-    ]
     return any(re.search(regexp, lower_text) for regexp in won_phrases)
 
 def cut_trailing_quotes(text):
@@ -584,59 +592,6 @@ def mapping_variation_pairs(mapping):
     return mapping_list
 
 
-first_to_second_mappings = [
-    ("I'm", "you're"),
-    ("i'm", "you're"),
-    ("Im", "you're"),
-    ("im", "you're"),
-    ("Ive", "you've"),
-    ("ive", "you've"),
-    ("I am", "you are"),
-    ("i am", "you are"),
-    ("wasn't I", "weren't you"),
-    ("I", "you"),
-    ("I'd", "you'd"),
-    ("i", "you"),
-    ("I've", "you've"),
-    ("was I", "were you"),
-    ("am I", "are you"),
-    ("was i", "were you"),
-    ("am i", "are you"),
-    ("wasn't I", "weren't you"),
-    ("I", "you"),
-    ("i", "you"),
-    ("I'd", "you'd"),
-    ("i'd", "you'd"),
-    ("I've", "you've"),
-    ("i've", "you've"),
-    ("I was", "you were"),
-    ("i was", "you were"),
-    ("my", "your"),
-    ("we", "you"),
-    ("we're", "you're"),
-    ("mine", "yours"),
-    ("me", "you"),
-    ("us", "you"),
-    ("our", "your"),
-    ("I'll", "you'll"),
-    ("i'll", "you'll"),
-    ("myself", "yourself"),
-]
-
-second_to_first_mappings = [
-    ("you're", "I'm"),
-    ("your", "my"),
-    ("you are", "I am"),
-    ("you were", "I was"),
-    ("are you", "am I"),
-    ("you", "I"),
-    ("you", "me"),
-    ("you'll", "I'll"),
-    ("yourself", "myself"),
-    ("you've", "I've"),
-]
-
-
 def capitalize_helper(string):
     string_list = list(string)
     string_list[0] = string_list[0].upper()
@@ -683,3 +638,24 @@ def second_to_first_person(text):
         for variation in variations:
             text = replace_outside_quotes(text, variation[0], variation[1])
     return text
+
+def get_all_keywords():
+    """Get all keywords that should be highlighted."""
+    keywords = set()
+    
+    # Add keywords from KEYWORD_ACTIONS
+    keywords.update(KEYWORD_ACTIONS.keys())
+    
+    # Add trigger phrases from INVENTORY_SUGGESTIONS
+    for trigger in INVENTORY_SUGGESTIONS.keys():
+        # Split compound triggers like "locked door" into individual words
+        # But only add words that are 4+ characters to avoid common words
+        words = [word for word in trigger.split() if len(word) >= 4]
+        keywords.update(words)
+    
+    # Add important action verbs and nouns (avoid common words like "of", "the", etc.)
+    important_words = palette_action_verbs + palette_important_nouns
+
+    keywords.update(important_words)
+    
+    return keywords
