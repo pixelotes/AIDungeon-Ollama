@@ -1016,7 +1016,7 @@ class GameManager:
         pwon, pdied = player_won(result), player_died(result)
         # If the player won or died, ask them if they want to continue.
         if pwon or pdied:
-            output(result, "ai-text")
+            output(result, "ai-text", beg='\n')
             if pwon:
                 output("YOU WON. CONGRATULATIONS", "message")
                 list_items(["Start a New Game", "\"I'm not done yet!\" (If you still want to play)"])
@@ -1030,7 +1030,7 @@ class GameManager:
                 output("Sorry about that...where were we?", "query")
 
         # Output the AI's result.
-        output(result, "ai-text")
+        output(result, "ai-text", beg='\n')
 
 
     def play_story(self):

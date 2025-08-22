@@ -39,7 +39,7 @@ class CharacterSheet:
         
     def display(self):
         """Prints the formatted character sheet to the console."""
-        output("\n--- Character Sheet ---", "title")
+        output("--- Character Sheet ---", "title", beg="\n")
         output("Stats:", "subtitle")
         for stat, value in self.stats.items():
             output(f"  {stat}: {value}", "menu")
@@ -50,7 +50,7 @@ class CharacterSheet:
         else:
             for item in sorted(self.inventory):
                 output(f"  - {item.title()}", "menu")
-        output("-----------------------", "title", end="\n\n")
+        output("-----------------------", "title", end="\n")
 
     def to_dict(self):
         """Converts the character sheet to a dictionary for saving."""
