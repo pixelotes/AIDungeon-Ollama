@@ -7,7 +7,7 @@ import os
 import sys
 
 from .getconfig import logger, settings, colors, ptcolors
-from shutil import get_terminal_size
+from shutil import get_terminal_size 
 
 
 def getTermWidth():
@@ -234,6 +234,36 @@ def input_bool(prompt, col1="default", default: bool = False):
     if not val or val[0] not in "yn":
         return default
     return val[0] == "y"
+
+def input_line_with_autocomplete(prompt_text, col1="default", default="", completer=None):
+    """Enhanced input_line with autocomplete support."""
+    if use_ptoolkit() and ptcolors['displaymethod'] == "prompt-toolkit":
+        from prompt_toolkit.shortcuts import CompleteStyle
+        from prompt_toolkit.styles import Style
+        
+        style = Style.from_dict({
+            'completion-menu.completion': 'bg:#87ceeb fg:black',
+            'completion-menu.completion.current': 'bg:#005f87 fg:white bold',
+            'scrollbar.background': 'bg:#88aaaa',
+            'scrollbar.button': 'bg:#222222',
+            'autocomplete': 'fg:#888888',  # Style for autocomplete suggestions
+        })
+        
+        col1_style = ptcolors[col1] if col1 and ptcolors[col1] else ""
+        
+        val = ptprompt(
+            to_formatted_text(prompt_text, col1_style),
+            default=default,
+            completer=completer,
+            complete_style=CompleteStyle.MULTI_COLUMN,
+            style=style,
+            complete_while_typing=True
+        )
+    else:
+        # Fallback to original input_line for non-prompt_toolkit
+        val = input_line(prompt_text, col1, default)
+    
+    return val
 
 def input_line(str, col1="default", default=""):
     if use_ptoolkit() and ptcolors['displaymethod'] == "prompt-toolkit":
