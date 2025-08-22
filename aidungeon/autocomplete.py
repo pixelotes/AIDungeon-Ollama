@@ -74,12 +74,20 @@ class GameCompleter(Completer):
                 # Complete individual words within the input
                 for verb in self.action_verbs:
                     if verb.lower().startswith(word_before_cursor.lower()):
-                        # Replace the partial word with the complete verb
-                        yield Completion(
-                            verb[len(word_before_cursor):],
-                            display=f"▶ You {verb}",
-                            style='class:autocomplete'
-                        )
+                        # If it is an exact match, complete with a space to make it a valid completion
+                        if verb.lower() == word_before_cursor.lower():
+                            yield Completion(
+                                ' ',
+                                display=f"▶ You {verb}",
+                                style='class:autocomplete'
+                            )
+                        else:
+                            # Replace the partial word with the complete verb
+                            yield Completion(
+                                verb[len(word_before_cursor):],
+                                display=f"▶ You {verb}",
+                                style='class:autocomplete'
+                            )
                         
                 # Complete with contextual keywords
                 try:

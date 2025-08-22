@@ -430,6 +430,45 @@ class GameManager:
             return input_line("\n> ", "main-prompt", default="You ")
     
 
+    def regenerate_suggestions(self):
+        """Generates a new set of suggestions and stores them in self.last_suggestions."""
+        total_suggestions_wanted = settings.getint("action-sugg")
+        suggested_actions = []
+
+        if total_suggestions_wanted > 0:
+            num_keyword_suggestions = settings.getint("keyword-sugg")
+            inventory_suggestions = self.get_state_based_suggestions()
+            if inventory_suggestions:
+                suggested_actions.append(random.choice(inventory_suggestions))
+
+            if len(suggested_actions) < num_keyword_suggestions:
+                last_result = self.story.results[-1].lower() if self.story.results else ""
+                present_keywords = [k for k in KEYWORD_ACTIONS if k in last_result]
+                random.shuffle(present_keywords)
+
+                for keyword in present_keywords:
+                    keyword_actions = KEYWORD_ACTIONS[keyword][:]
+                    random.shuffle(keyword_actions)
+                    for action in keyword_actions:
+                        if action not in suggested_actions:
+                            suggested_actions.append(action)
+                        if len(suggested_actions) >= num_keyword_suggestions:
+                            break
+                    if len(suggested_actions) >= num_keyword_suggestions:
+                        break
+
+
+            num_ai_suggestions = total_suggestions_wanted - len(suggested_actions)
+            if num_ai_suggestions > 0:
+                for _ in range(num_ai_suggestions):
+                    new_suggestion = self.story.get_suggestion(previous_suggestions=suggested_actions)
+                    if new_suggestion and new_suggestion not in suggested_actions:
+                        suggested_actions.append(new_suggestion)
+
+            self.last_suggestions = list(dict.fromkeys(suggested_actions))[:total_suggestions_wanted]
+        else:
+            self.last_suggestions = []
+
     def get_state_based_suggestions(self):
         """Parse the last result for keywords and return relevant actions."""
         if not self.story or not self.story.results:
@@ -601,6 +640,7 @@ class GameManager:
                 roll_action = f"You roll {result['notation'].upper()} and get {result['total']}"
                 self.story.act(roll_action, record=True)
 
+        # Dice shortcuts. Use "/roll" for rolling multiple dice.
         elif command in ["d4", "d6", "d8", "d10", "d12", "d20", "d100"]:
             die_size = command[1:]  # Remove the 'd'
             result = roll_dice(f"1d{die_size}")
@@ -608,6 +648,14 @@ class GameManager:
             output(formatted_result, "message")
             self.skip_suggestion_regeneration = True
             self.hide_suggestions_for_next_prompt = True
+
+        elif command == "suggest":
+            self.regenerate_suggestions()
+            self.story.print_last()
+            # The main game loop will now handle displaying the suggestions.
+            self.skip_suggestion_regeneration = True
+            self.hide_suggestions_for_next_prompt = False
+            return False
 
         elif command in ["look", "recall"]:
             self.story.print_last()
@@ -830,9 +878,9 @@ class GameManager:
             # If the user enters nothing but leaves "you", treat it like an empty action (continue)
             if re.match(r"^(?: *you *)*[.?!]? *$", action, flags=re.I):
                 action = ""
-            else:
+            #else:
                 # Prompt the user with the formatted action
-                output("> " + format_result(action), "transformed-user-text")
+                #output("> " + format_result(action), "transformed-user-text")
 
         if action == "":
             output("Continuing...", "message")
@@ -872,49 +920,14 @@ class GameManager:
 
         while True:
             # Generate suggestions if not skipped
-
-            suggested_actions = []
-
             if not self.skip_suggestion_regeneration:
-                total_suggestions_wanted = settings.getint("action-sugg")
-                
-                if total_suggestions_wanted > 0:
-                    # (This is the existing suggestion generation logic)
-                    num_keyword_suggestions = settings.getint("keyword-sugg")
-                    inventory_suggestions = self.get_state_based_suggestions()
-                    if inventory_suggestions:
-                        suggested_actions.append(random.choice(inventory_suggestions))
-                    
-                    if len(suggested_actions) < num_keyword_suggestions:
-                        last_result = self.story.results[-1].lower() if self.story.results else ""
-                        present_keywords = [k for k in KEYWORD_ACTIONS if k in last_result]
-                        random.shuffle(present_keywords)
-                        
-                        for keyword in present_keywords:
-                            keyword_actions = KEYWORD_ACTIONS[keyword][:]
-                            random.shuffle(keyword_actions)
-                            for action in keyword_actions:
-                                if action not in suggested_actions:
-                                    suggested_actions.append(action)
-                                if len(suggested_actions) >= num_keyword_suggestions:
-                                    break
-                            if len(suggested_actions) >= num_keyword_suggestions:
-                                break
-                    
-                    num_ai_suggestions = total_suggestions_wanted - len(suggested_actions)
-                    if num_ai_suggestions > 0:
-                        for _ in range(num_ai_suggestions):
-                            new_suggestion = self.story.get_suggestion(previous_suggestions=suggested_actions)
-                            if new_suggestion and new_suggestion not in suggested_actions:
-                                suggested_actions.append(new_suggestion)
-
-                    self.last_suggestions = list(dict.fromkeys(suggested_actions))[:total_suggestions_wanted]
+                self.regenerate_suggestions()
 
             # Reset the flag after checking it
             self.skip_suggestion_regeneration = False
 
             # Get user input
-            action = self._display_prompt_and_get_action(suggested_actions)
+            action = self._display_prompt_and_get_action(self.last_suggestions)
 
             # Process user input
             cmd_regex = re.search(r"^(?: *you *)?\/([^ ]+) *(.*)$", action, flags=re.I)

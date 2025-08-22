@@ -128,7 +128,7 @@ palette_commands = [
     '/revert', '/quit', '/menu', '/retry', '/restart', '/print', '/sheet',
     '/look', '/drop', '/alter', '/altergen', '/context', '/remember',
     '/memalt', '/memswap', '/roll', '/forget', '/save', '/load',
-    '/summarize', '/generate', '/help', '/set', '/settings',
+    '/summarize', '/generate', '/help', '/set', '/settings', '/suggest',
     # Add dice shortcuts as commands too
     '/d4', '/d6', '/d8', '/d10', '/d12', '/d20', '/d100'
 ]
