@@ -1,0 +1,7 @@
+---
+apiVersion: v2
+name: aidungeon
+description: AIDungeon2 Clover Edition (Ollama backend) — web UI + WebSocket terminal
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

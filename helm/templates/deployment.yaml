@@ -1,0 +1,46 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aidungeon
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: aidungeon
+  template:
+    metadata:
+      labels:
+        app: aidungeon
+    spec:
+      containers:
+        - name: aidungeon
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: ws
+              containerPort: 8765
+          env:
+            - name: OLLAMA_HOST
+              value: {{ .Values.ollama.host | quote }}
+            - name: OLLAMA_MODEL
+              value: {{ .Values.ollama.model | quote }}
+            - name: OLLAMA_TIMEOUT
+              value: {{ .Values.ollama.timeout | quote }}
+            - name: ACTION_SUGGESTIONS
+              value: {{ .Values.actionSuggestions | quote }}
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: saves
+              mountPath: /app/saves
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: saves
+          persistentVolumeClaim:
+            claimName: aidungeon-saves
+      {{- end }}
