@@ -1,9 +1,7 @@
 FROM python:3.11.13-slim
 
-# Set working directory
 WORKDIR /app
 
-# Set environment variables
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV OLLAMA_HOST=http://host.docker.internal:11434
@@ -11,25 +9,20 @@ ENV OLLAMA_MODEL=llama2:7b
 ENV OLLAMA_TIMEOUT=120
 ENV ACTION_SUGGESTIONS=3
 
-# Copy requirements and install Python dependencies
+# Install Python dependencies first (better layer caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application code
+# Application code
 COPY aidungeon/ ./aidungeon/
-COPY config.ini .
-COPY launch.py .
-COPY web_terminal.py .
-COPY index.html .
 COPY interface/ ./interface/
 COPY prompts/ ./prompts/
 COPY saves/ ./saves/
+COPY config.ini web_terminal.py index.html ./
 
-# Set proper permissions
 RUN chmod -R 755 /app
 
-# Expose ports for web interface
-EXPOSE 8080 8765
+# HTTP UI + WebSocket on same port (WS path: /ws)
+EXPOSE 8080
 
-# Run the application
 CMD ["python", "web_terminal.py"]

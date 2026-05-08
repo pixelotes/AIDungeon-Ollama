@@ -18,5 +18,5 @@ spec:
               service:
                 name: aidungeon
                 port:
-                  number: {{ .Values.service.httpPort }}
+                  number: {{ .Values.service.port }}
 {{- end }}
